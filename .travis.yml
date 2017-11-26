@@ -9,7 +9,7 @@ addons:
       - ubuntu-toolchain-r-test
     packages:
       - g++-5
-      - libgtkmm3.0-dev
+      - libgtkmm-3.0-dev
       - libbluetooth-dev
 
 script:
