@@ -1,6 +1,6 @@
 # bluetoother
 dist: xenial
-sudo: false
+sudo: true
 language: cpp
 
 addons:
