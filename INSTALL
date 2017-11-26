@@ -5,7 +5,7 @@
 Requirements
 ------------
 g++ compiler or compatible (>= C++14)
-libgtkmm3.0-dev
+libgtkmm-3.0-dev
 libbluetooth-dev
 
 In order to work the Linux distro must support systemd and rfkill.
