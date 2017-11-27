@@ -41,16 +41,21 @@ public:
 	HciSocket();
 	~HciSocket();
 
-	// returns false if errors and sets 
+	/** Update.
+	 * If errors occur sets last error.
+	 * @return False if some error.
+	 */
 	bool update();
 	
 	/** The healthy hci ids.
 	 * ex. the 0 in "hci0:".
+	 * Calls update() if not called yet.
 	 * @return The set.
 	 */
 	const std::vector<int32_t>& getHciIds();
 	/** The faulty hci ids.
 	 * ex. the 0 in "hci0:".
+	 * Calls update() if not called yet.
 	 * @return The set.
 	 */
 	const std::vector<int32_t>& getFaultyHciIds();

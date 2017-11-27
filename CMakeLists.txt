@@ -2,6 +2,9 @@
 
 cmake_minimum_required(VERSION 3.0)
 
+option(STMM_INSTALL_LAUNCHER "Install launcher in share/applications/ (implies STMM_INSTALL_ICONS=ON)" ON)
+option(STMM_INSTALL_ICONS "Install icons in share/icons/hicolor/(size)/apps/" ON)
+
 project(bluetoother CXX)
 
 set(RUNTIME_OUTPUT_DIRECTORY "build")
@@ -49,9 +52,22 @@ set(STMMI_BTER_SOURCES
         ${PROJECT_SOURCE_DIR}/src/tootherwindow.h
         ${PROJECT_SOURCE_DIR}/src/tootherwindow.cc
         )
-set(STMMI_BTER_DATA_FILES
-#         ${PROJECT_SOURCE_DIR}/data/some.png
-        )
+
+if (STMM_INSTALL_LAUNCHER)
+    mark_as_advanced(STMMIFINDGKSU)
+    find_program(
+            STMMIFINDGKSU
+            gksu
+            NO_CMAKE_PATH
+            NO_CMAKE_ENVIRONMENT_PATH
+            NO_CMAKE_SYSTEM_PATH
+            )
+    if ("${STMMIFINDGKSU}" STREQUAL "STMMIFINDGKSU-NOTFOUND")
+         message(FATAL_ERROR "Couldn't find the gksu command. Install the gksu package first!")
+    endif()
+endif()
+
+set(STMMI_BTER_DATA_DIR ${PROJECT_SOURCE_DIR}/data)
 
 add_executable(bluetoother ${STMMI_BTER_SOURCES} ${PROJECT_BINARY_DIR}/config.cc)
 
@@ -73,13 +89,11 @@ if ($ENV{STMM_CMAKE_COMMENTS})
 message(STATUS "")
 message(STATUS "bluetoother was configured with the following options:")
 message(STATUS " STMMI_BTER_SOURCES:            ${STMMI_BTER_SOURCES}")
-#message(STATUS " STMMI_BTER_EXTRA_INCLUDE_DIRS: ${STMMI_BTER_EXTRA_INCLUDE_DIRS}")
 message(STATUS " STMMI_BTER_EXTRA_LIBS:         ${STMMI_BTER_EXTRA_LIBS}")
-message(STATUS " STMMI_BTER_DATA_FILES          ${STMMI_BTER_DATA_FILES}")
+message(STATUS " STMMI_BTER_ICON_FILES          ${STMMI_BTER_ICON_FILES}")
 message(STATUS " CMAKE_BUILD_TYPE:              ${CMAKE_BUILD_TYPE}")
 message(STATUS " CMAKE_CXX_COMPILER_ID:         ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS " CMAKE_CXX_COMPILER_VERSION:    ${CMAKE_CXX_COMPILER_VERSION}")
-#message(STATUS " CMAKE_CXX_FLAGS:               $<TARGET_PROPERTY:bluetoother,COMPILE_OPTIONS>")
 message(STATUS " install prefix:                ${CMAKE_INSTALL_PREFIX}")
 endif()
 
@@ -87,5 +101,18 @@ target_link_libraries(bluetoother ${STMMI_BTER_EXTRA_LIBS}) # ${STMMI_BTER_EXTRA
 
 install(TARGETS bluetoother RUNTIME DESTINATION "bin")
 
-install(FILES ${STMMI_BTER_DATA_FILES}  DESTINATION   ${BLUETOOTHER_PKG_REL_DATA_DIR})
-
+if (STMM_INSTALL_LAUNCHER)
+    install(FILES         "${STMMI_BTER_DATA_DIR}/applications/bluetoother.desktop"
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/applications/")
+endif()
+if (STMM_INSTALL_ICONS OR STMM_INSTALL_LAUNCHER)
+    install(FILES         "${STMMI_BTER_DATA_DIR}/icons/hicolor/24x24/apps/bluetoother.png"
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/24x24/apps/")
+    install(FILES         "${STMMI_BTER_DATA_DIR}/icons/hicolor/32x32/apps/bluetoother.png"
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/32x32/apps/")
+    install(FILES         "${STMMI_BTER_DATA_DIR}/icons/hicolor/48x48/apps/bluetoother.png"
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/48x48/apps/")
+    install(FILES         "${STMMI_BTER_DATA_DIR}/icons/hicolor/scalable/apps/bluetoother.svg"
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps/")
+endif()
+ 

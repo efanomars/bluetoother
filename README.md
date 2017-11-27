@@ -4,7 +4,11 @@ bluetoother
 bluetoother is a GUI tool to configure bluetooth adapter connectivity
 for systemd and bluez (libbluetooth).
 
-It needs to be run with sudo or gksu.
+It needs to be run with root privileges:
+
+- from a terminal:          sudo bluetoother
+
+- from a desktop launcher:  gksu bluetoother
 
 Functionality:
 

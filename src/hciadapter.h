@@ -33,11 +33,11 @@ namespace stmi
 {
 
 //
-// The bluetooth.service when started enables the adapter
-// The bluetooth.service when stopped disables the adapter
+// The bluetooth.service when started ups the adapter
+// The bluetooth.service when stopped downs the adapter
 // But whether the bluetooth.service is running or not
-// the adapter can be enabled and disabled with hciconfig
-// Only rfkill block can bring down the adapter
+// the adapter can be upped and downed with hciconfig
+// Only rfkill block can disable the adapter
 
 class HciAdapter
 {

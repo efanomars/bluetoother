@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Bluetoother
+Icon=bluetoother
+Type=Application
+Terminal=false
+Categories=Utility;
+Encoding=UTF-8
+Comment=Bluetooth adapter connectivity
+Exec=gksu bluetooth
+GenericName=Bluetooth management
+Name[en_US]=Bluetoother

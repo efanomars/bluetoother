@@ -15,13 +15,10 @@
 #  You should have received a copy of the GNU Lesser General Public
 #  License along with this library; if not, see <http://www.gnu.org/licenses/>
 
-# File:   testall.py
+# File:   compileall.py
 
-# - compiles and installs all the projects (binaries) contained in this source package
-#   for both Debug and Release configurations and for both shared and static libs
-# - compiles the examples
-# - creates documentation and checks it is ok
-# - runs all tests
+# - compiles and installs all the project contained in this source package
+#   for both Debug and Release configurations
 # - makes sure no line in the code starts with std::cout
 # - optionally calls clang-llvm sanitizer
 # - optionally calls clang-tidy
@@ -135,9 +132,9 @@ def main():
 			if oArgs.bTidy and not bTidyDone:
 				checkTidy()
 
-	print("---------------------------------")
-	print("testall.py finished successfully!")
-	print("---------------------------------")
+	print("------------------------------------")
+	print("compileall.py finished successfully!")
+	print("------------------------------------")
 
 
 if __name__ == "__main__":

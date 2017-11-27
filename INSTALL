@@ -8,8 +8,8 @@ g++ compiler or compatible (>= C++14)
 libgtkmm-3.0-dev
 libbluetooth-dev
 
+At runtime bluetoother might need the gksu package to be started.
 In order to work the Linux distro must support systemd and rfkill.
-
 
 
 Instructions
@@ -37,7 +37,7 @@ sudo might be omitted if installing to a directory owned by the current user.
 
 Alternatively you can just execute the script
 
-  $ ./scripts/install_bluetoother.py  -b Release  --destdir /home/adam/mylib
+  $ ./scripts/install_bluetoother.py  -b Release  --destdir /home/adam/bin
 
 setting the parameter(s) to your preferred value (like above).
 

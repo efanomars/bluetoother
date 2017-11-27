@@ -31,9 +31,6 @@
 
 #include <unistd.h>
 
-//#include <cmath>
-//#include <cstdlib>
-
 namespace stmi
 {
 
@@ -44,48 +41,14 @@ void printVersion()
 void printUsage()
 {
 	std::cout << "Usage: bluetoother" << '\n';
-	std::cout << "Setup bluetooth." << '\n';
+	std::cout << "Setup bluetooth adpter connectivity." << '\n';
 	std::cout << "Option:" << '\n';
 	std::cout << "  -h --help              Prints this message." << '\n';
 	std::cout << "  -v --version           Prints version." << '\n';
-	//std::cout << "  -i --interval N        Check interval: N milliseconds" << '\n';
-	//std::cout << "                         (default: " << XXX::s_nDefaultInterval << ")." << '\n';
 }
 
-//bool evalArg(int& argc, char**& argv, const std::string& sOption1, const std::string& sOption2, int32_t& nVar)
-//{
-//	if (argv[1] == nullptr) {
-//		return true;
-//	}
-//	const bool bIsOption1 = (sOption1 == std::string(argv[1]));
-//	if (bIsOption1 || ((!sOption2.empty()) && (sOption2 == std::string(argv[1])))) {
-//		--argc;
-//		++argv;
-//		if (argc == 1) {
-//			std::cout << "Error: " << (bIsOption1 ? sOption1 : sOption2) << " missing argument" << '\n';
-//			return false; //----------------------------------------------------
-//		} else {
-//			try {
-//				double fInterval = Glib::Ascii::strtod(argv[1]);
-//				if (fInterval < 50) {
-//					nVar = 50;
-//				} else {
-//					nVar = std::ceil(fInterval);
-//				}
-//			} catch (const std::runtime_error& oErr) {
-//				std::cout << "Error: " << oErr.what() << '\n';
-//				return false; //------------------------------------------------
-//			}
-//			--argc;
-//			++argv;
-//		}
-//	}
-//	return true;
-//}
 int bluetootherMain(int argc, char** argv)
 {
-	//int32_t nInterval = XXX::s_nDefaultInterval;
-	//
 	char* argvZeroSave = ((argc >= 1) ? argv[0] : nullptr);
 	while (argc >= 2) {
 		auto nOldArgC = argc;

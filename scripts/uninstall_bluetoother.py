@@ -61,6 +61,11 @@ def main():
 
 	subprocess.check_call("{} rm -r -f {}/bin/bluetoother".format(sSudo, sDestDir).split())
 	subprocess.check_call("{} rm -r -f {}/share/bluetoother".format(sSudo, sDestDir).split())
+	subprocess.check_call("{} rm -r -f {}/share/icons/hicolor/24x24/apps/bluetoother.png".format(sSudo, sDestDir).split())
+	subprocess.check_call("{} rm -r -f {}/share/icons/hicolor/32x32/apps/bluetoother.png".format(sSudo, sDestDir).split())
+	subprocess.check_call("{} rm -r -f {}/share/icons/hicolor/48x48/apps/bluetoother.png".format(sSudo, sDestDir).split())
+	subprocess.check_call("{} rm -r -f {}/share/icons/hicolor/scalable/apps/bluetoother.svg".format(sSudo, sDestDir).split())
+	subprocess.check_call("{} rm -r -f {}/share/applications/bluetoother.desktop".format(sSudo, sDestDir).split())
 
 	if oArgs.bRemoveBuilds:
 		os.chdir("..")
