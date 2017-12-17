@@ -21,6 +21,7 @@
 #include "tootherwindow.h"
 
 #include "config.h"
+#include "jsoncommon.h"
 
 #include <cassert>
 #include <iostream>
@@ -28,9 +29,9 @@
 namespace stmi
 {
 
-TootherWindow::TootherWindow(const std::string& sTitle, BtService& oBtService, HciSocket& oHciSocket)
-: m_oBtService(oBtService)
-, m_oHciSocket(oHciSocket)
+TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nReturnPipeFD)
+: Gtk::Window()
+, m_nCmdPipeFD(nCmdPipeFD)
 //, m_p0NotebookChoices(nullptr)
 //, m_p0TabLabelMain(nullptr)
 , m_p0VBoxMain(nullptr)
@@ -49,7 +50,6 @@ TootherWindow::TootherWindow(const std::string& sTitle, BtService& oBtService, H
 , m_p0CheckButtonAdapterDetectable(nullptr)
 , m_p0CheckButtonServiceRunning(nullptr)
 , m_p0CheckButtonServiceEnabled(nullptr)
-, m_p0ButtonTurnAllOn(nullptr)
 //, m_p0TabLabelLog(nullptr)
 //, m_p0ScrolledLog(nullptr)
 , m_p0TextViewLog(nullptr)
@@ -58,11 +58,14 @@ TootherWindow::TootherWindow(const std::string& sTitle, BtService& oBtService, H
 //, m_p0LabelInfoText(nullptr)
 , m_nTextBufferLogTotLines(0)
 , m_nSelectedHciId(-1)
-, m_bNeedsRefreshing(false)
-, m_bNeedsEnablingEverything(false)
-, m_bRefreshing(false)
-, m_bRegeneratingAdaptersModel(false)
+, m_nStamp(0)
+, m_bWaitingForReturn(false)
+, m_bWaitingForState(false)
+, m_bSettingWidgetsValues(false)
 {
+	m_refPipeInputSource = Glib::RefPtr<PipeInputSource>(new PipeInputSource(nReturnPipeFD));
+	m_refPipeInputSource->connect(sigc::mem_fun(*this, &TootherWindow::doReceiveString));
+	m_refPipeInputSource->attach();
 	//
 	set_title(sTitle);
 	set_default_size(s_nInitialWindowSizeW, s_nInitialWindowSizeH);
@@ -83,7 +86,7 @@ TootherWindow::TootherWindow(const std::string& sTitle, BtService& oBtService, H
 			"It provides some of the functionality of the command line tools\n"
 			"rfkill, hciconfig and sytemctl.\n\n"
 			"The interface of this program is not reactive. If the settings\n"
-			"are changed from another program you need to press the 'Refresh'\n"
+			"are changed from another program, you need to press the 'Refresh'\n"
 			"button to see them. The Log tab mostly only shows errors.";
 
 	Glib::RefPtr<Gtk::TreeSelection> refTreeSelection;
@@ -98,6 +101,7 @@ TootherWindow::TootherWindow(const std::string& sTitle, BtService& oBtService, H
 	m_p0VBoxMain = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_VERTICAL));
 	m_aPageIndex[s_nTabMain] = m_p0NotebookChoices->append_page(*m_p0VBoxMain, *m_p0TabLabelMain);
 		m_p0VBoxMain->set_spacing(4);
+		m_p0VBoxMain->set_border_width(5);
 
 		Gtk::Box* m_p0HBoxRefreshAdapters = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL));
 		m_p0VBoxMain->pack_start(*m_p0HBoxRefreshAdapters, false, false);
@@ -140,6 +144,7 @@ TootherWindow::TootherWindow(const std::string& sTitle, BtService& oBtService, H
 			m_p0HBoxLocalName->pack_start(*m_p0LabelLocalName, false, false);
 			m_p0EntryAdapterLocalName = Gtk::manage(new Gtk::Entry());
 			m_p0HBoxLocalName->pack_start(*m_p0EntryAdapterLocalName, true, true);
+				m_p0EntryAdapterLocalName->get_buffer()->set_max_length(s_nMaxLocalNameSize);
 				m_p0EntryAdapterLocalName->signal_focus_out_event().connect(
 								sigc::mem_fun(*this, &TootherWindow::onAdapterLocalNameChangedFocus) );
 
@@ -161,11 +166,6 @@ TootherWindow::TootherWindow(const std::string& sTitle, BtService& oBtService, H
 		m_p0VBoxMain->pack_start(*m_p0CheckButtonServiceEnabled, false, false);
 			m_p0CheckButtonServiceEnabled->signal_toggled().connect(
 							sigc::mem_fun(*this, &TootherWindow::onServiceEnabledToggled) );
-
-		m_p0ButtonTurnAllOn = Gtk::manage(new Gtk::Button("Turn all on"));
-		m_p0VBoxMain->pack_start(*m_p0ButtonTurnAllOn, false, false);
-			m_p0ButtonTurnAllOn->signal_clicked().connect(
-							sigc::mem_fun(*this, &TootherWindow::onButtonTurnAllOn) );
 
 	Gtk::Label* m_p0TabLabelLog = Gtk::manage(new Gtk::Label("Log"));
 	Gtk::ScrolledWindow* m_p0ScrolledLog = Gtk::manage(new Gtk::ScrolledWindow());
@@ -203,49 +203,184 @@ TootherWindow::TootherWindow(const std::string& sTitle, BtService& oBtService, H
 TootherWindow::~TootherWindow()
 {
 }
-void TootherWindow::onNotebookSwitchPage(Gtk::Widget*, guint nPageNum)
+void TootherWindow::setWidgetsValue()
 {
-	if (nPageNum >= s_nTotPages) {
+	if (m_bSettingWidgetsValues) {
 		return;
 	}
+	m_bSettingWidgetsValues = true;
+
+	const bool bStateOk = !m_oCurState.is_null();
+
+	m_refTreeModelAdapters->clear();
+
+	int32_t nSelectedIdx = -1;
+
+	if (!bStateOk) {
+		m_nSelectedHciId = -1;
+		printStringToLog("No bluetooth adapters found!");
+	} else {
+		const auto& oAdapters = m_oCurState[JsonCommon::s_sKeyModelAdapters];
+		assert(oAdapters.is_array());
+		const auto nTotAdapters = oAdapters.size();
+		if (nTotAdapters > 0) {
+			if (m_nSelectedHciId < 0) {
+				const auto& oAdapter = oAdapters[0];
+				assert(oAdapter.is_object());
+				assert(oAdapter[JsonCommon::s_sKeyModelAdapterHciId].is_number_integer());
+				m_nSelectedHciId = oAdapter[JsonCommon::s_sKeyModelAdapterHciId];
+			} else {
+				// test whether the selected id still exists
+				const auto ifFind = std::find_if(oAdapters.begin(), oAdapters.end(), [&](const json& oAdapter) {
+					assert(oAdapter.is_object());
+					assert(oAdapter[JsonCommon::s_sKeyModelAdapterHciId].is_number_integer());
+					return (oAdapter[JsonCommon::s_sKeyModelAdapterHciId] == m_nSelectedHciId);
+				});
+				if (ifFind == oAdapters.end()) {
+					// if not set selected to first adapter
+					const auto& oAdapter = oAdapters[0];
+					assert(oAdapter.is_object());
+					assert(oAdapter[JsonCommon::s_sKeyModelAdapterHciId].is_number_integer());
+					m_nSelectedHciId = oAdapter[JsonCommon::s_sKeyModelAdapterHciId];
+				}
+			}
+		}
+		int32_t nIdx = 0;
+		for (const auto& oAdapter : oAdapters) {
+			assert(oAdapter.is_object());
+			assert(oAdapter[JsonCommon::s_sKeyModelAdapterHciId].is_number_integer());
+			const int32_t nHciId = oAdapter[JsonCommon::s_sKeyModelAdapterHciId];
+			Gtk::TreeModel::Row oAdapterRow;
+			assert(m_refTreeModelAdapters);
+			oAdapterRow = *(m_refTreeModelAdapters->append()); //oGameRow.children()
+			assert(oAdapter[JsonCommon::s_sKeyModelAdapterName].is_string());
+			const std::string& sLocalName = oAdapter[JsonCommon::s_sKeyModelAdapterName];
+			oAdapterRow[m_oAdaptersColumns.m_oColHciName] = sLocalName;
+			oAdapterRow[m_oAdaptersColumns.m_oColHiddenHciId] = nHciId;
+			//
+			if (nHciId == m_nSelectedHciId) {
+				nSelectedIdx = nIdx;
+			}
+			++nIdx;
+		}
+		// set selection on tree view widget
+		Glib::RefPtr<Gtk::TreeSelection> refTreeSelection = m_p0TreeViewAdapters->get_selection();
+		Gtk::TreeModel::Path oPath;
+		if (nSelectedIdx >= 0) {
+			oPath.push_back(nSelectedIdx);
+		}
+//std::cout << "   oPath.size=" << oPath.size() << '\n';
+		refTreeSelection->select(oPath);
+		//
+		if (m_nSelectedHciId < 0) {
+			json& oFaultyAdapters = m_oCurState[JsonCommon::s_sKeyModelFaultyAdapters];
+			const auto nTotFaultyAdapters = oFaultyAdapters.size();
+			if (nTotFaultyAdapters > 0) {
+				printStringToLog("No healthy bluetooth adapters found!");
+			} else {
+				printStringToLog("No bluetooth adapters found!");
+			}
+		}
+	}
+	bool bHardwareEnabled = false;
+	bool bSoftwareEnabled = false;
+	bool bIsUp = false;
+	std::string sLocalName;
+	bool bIsConnectable = false;
+	bool bIsDetectable = false;
+	bool bServiceRunning = false;
+	bool bServiceEnabled = false;
+
+	if (m_nSelectedHciId >= 0) {
+		// There are adapters
+		const auto& oAdapters = m_oCurState[JsonCommon::s_sKeyModelAdapters];
+		assert(nSelectedIdx >= 0);
+		const auto& oAdapter = oAdapters[nSelectedIdx];
+		m_p0LabelCurrentAdapter->set_text(std::string("Adapter id: hci") + std::to_string(m_nSelectedHciId));
+		assert(oAdapter[JsonCommon::s_sKeyModelAdapterAddress].is_string());
+		const std::string& sAddress = oAdapter[JsonCommon::s_sKeyModelAdapterAddress];
+		m_p0LabelCurrentAddress->set_text(std::string("Bluetooth address: ") + sAddress);
+		//
+		assert(oAdapter[JsonCommon::s_sKeyModelAdapterHardwareEnabled].is_boolean());
+		bHardwareEnabled = oAdapter[JsonCommon::s_sKeyModelAdapterHardwareEnabled];
+		assert(oAdapter[JsonCommon::s_sKeyModelAdapterSoftwareEnabled].is_boolean());
+		bSoftwareEnabled = oAdapter[JsonCommon::s_sKeyModelAdapterSoftwareEnabled];
+		//
+		if (bHardwareEnabled && bSoftwareEnabled) {
+			assert(oAdapter[JsonCommon::s_sKeyModelAdapterIsUp].is_boolean());
+			bIsUp = oAdapter[JsonCommon::s_sKeyModelAdapterIsUp];
+			if (bIsUp) {
+				assert(oAdapter[JsonCommon::s_sKeyModelAdapterName].is_string());
+				sLocalName = oAdapter[JsonCommon::s_sKeyModelAdapterName];
+				assert(oAdapter[JsonCommon::s_sKeyModelAdapterConnectable].is_boolean());
+				bIsConnectable = oAdapter[JsonCommon::s_sKeyModelAdapterConnectable];
+				assert(oAdapter[JsonCommon::s_sKeyModelAdapterDetectable].is_boolean());
+				bIsDetectable = oAdapter[JsonCommon::s_sKeyModelAdapterDetectable];
+			}
+		}
+	}
+	if (bStateOk) {
+		assert(m_oCurState[JsonCommon::s_sKeyModelServiceRunning].is_boolean());
+		bServiceRunning = m_oCurState[JsonCommon::s_sKeyModelServiceRunning];
+		assert(m_oCurState[JsonCommon::s_sKeyModelServiceEnabled].is_boolean());
+		bServiceEnabled = m_oCurState[JsonCommon::s_sKeyModelServiceEnabled];
+	}
+	m_p0CheckButtonHardwareEnabled->set_active(bHardwareEnabled);
+	m_p0CheckButtonSoftwareEnabled->set_active(bSoftwareEnabled);
+	m_p0CheckButtonAdapterIsUp->set_active(bIsUp);
+	m_p0EntryAdapterLocalName->set_text(sLocalName);
+	m_p0CheckButtonAdapterConnectable->set_active(bIsConnectable);
+	m_p0CheckButtonAdapterDetectable->set_active(bIsDetectable);
+	m_p0CheckButtonServiceRunning->set_active(bServiceRunning);
+	m_p0CheckButtonServiceEnabled->set_active(bServiceEnabled);
+
+	m_bSettingWidgetsValues = false;
 }
-void TootherWindow::setSensitivityForState()
+void TootherWindow::setWidgetsSensitivity()
 {
-//std::cout << "setSensitivityForState  m_bNeedsRefreshing=" << m_bNeedsRefreshing << '\n';
-	if (m_bNeedsRefreshing || m_bNeedsEnablingEverything) {
+	if (m_bWaitingForReturn) {
 		m_p0VBoxMain->set_sensitive(false);
 		return; //--------------------------------------------------------------
 	}
 	m_p0VBoxMain->set_sensitive(true);
-	m_p0ButtonRefresh->set_sensitive(!m_bRefreshing);
-	if (m_bRefreshing) {
-		return; //--------------------------------------------------------------
+
+	bool bManyAdapters = false;
+	if (! m_oCurState.is_null()) {
+		const json& oAdapters = m_oCurState[JsonCommon::s_sKeyModelAdapters];
+		assert(oAdapters.is_array());
+		const auto nTotAdapters = oAdapters.size();
+		bManyAdapters = (nTotAdapters > 1);
 	}
+
 	const bool bShowListOverride = false;
 	//
-	const auto& aHciIds = m_oHciSocket.getHciIds();
-	const bool bManyAdapters = (aHciIds.size() > 1);
 	m_p0TreeViewAdapters->set_visible(bManyAdapters || bShowListOverride);
 	m_p0LabelCurrentAdapter->set_visible(!bManyAdapters);
 
-	const bool bAdapterSelected = (m_nSelectedHciId >= 0);
-	if (bAdapterSelected) {
-		assert(m_oHciSocket.getAdapter(m_nSelectedHciId) != nullptr);
-	}
 	bool bHardwareEnabled = false;
 	bool bSoftwareEnabled = false;
 	bool bAdapterEnabled = false;
 	bool bIsUp = false;
+	const bool bAdapterSelected = (m_nSelectedHciId >= 0);
 	if (bAdapterSelected) {
-		auto p0Adapter = m_oHciSocket.getAdapter(m_nSelectedHciId);
-		assert(p0Adapter != nullptr);
+		const json& oAdapters = m_oCurState[JsonCommon::s_sKeyModelAdapters];
+		const auto ifFind = std::find_if(oAdapters.begin(), oAdapters.end(), [&](const json& oAdapter) {
+			assert(oAdapter.is_object());
+			assert(oAdapter[JsonCommon::s_sKeyModelAdapterHciId].is_number_integer());
+			return (oAdapter[JsonCommon::s_sKeyModelAdapterHciId] == m_nSelectedHciId);
+		});
+		assert(ifFind != oAdapters.end());
+		const auto& oAdapter = *ifFind;
+		assert(oAdapter[JsonCommon::s_sKeyModelAdapterHardwareEnabled].is_boolean());
+		bHardwareEnabled = oAdapter[JsonCommon::s_sKeyModelAdapterHardwareEnabled];
+		assert(oAdapter[JsonCommon::s_sKeyModelAdapterSoftwareEnabled].is_boolean());
+		bSoftwareEnabled = oAdapter[JsonCommon::s_sKeyModelAdapterSoftwareEnabled];
 		//
-		bHardwareEnabled = p0Adapter->isHardwareEnabled();
-		bSoftwareEnabled = p0Adapter->isSoftwareEnabled();
 		bAdapterEnabled = bHardwareEnabled && bSoftwareEnabled;
 		//
 		if (bAdapterEnabled) {
-			bIsUp = !p0Adapter->isDown();
+			assert(oAdapter[JsonCommon::s_sKeyModelAdapterIsUp].is_boolean());
+			bIsUp = oAdapter[JsonCommon::s_sKeyModelAdapterIsUp];
 		}
 	}
 	m_p0CheckButtonHardwareEnabled->set_sensitive(false);
@@ -258,178 +393,140 @@ void TootherWindow::setSensitivityForState()
 	m_p0CheckButtonServiceRunning->set_sensitive(true);
 	m_p0CheckButtonServiceEnabled->set_sensitive(true);
 
-	m_p0ButtonTurnAllOn->set_sensitive(bHardwareEnabled);
-
+// 	m_p0ButtonTurnAllOn->set_sensitive(true);
 }
 void TootherWindow::startRefreshing(int32_t nMillisec)
 {
-//std::cout << "TootherWindow::startRefreshing() nMillisec" << nMillisec << '\n';
-	if (m_bNeedsRefreshing) {
-		return;
-	}
-	m_bNeedsRefreshing = true;
+//std::cout << "TootherWindow::startRefreshing() nMillisec = " << nMillisec << '\n';
+	cursorToHourglass();
+	m_bWaitingForReturn = true;
+	m_bWaitingForState = true;
+	setWidgetsSensitivity();
+	//
+	++m_nStamp;
+	json oRoot = json::object();
+	oRoot[JsonCommon::s_sKeyCmd] = JsonCommon::s_sValueCmdGetState;
+	oRoot[JsonCommon::s_sKeyStamp] = m_nStamp;
+	sendCmd(oRoot.dump(4));
+	startTimeout(m_nStamp, nMillisec);
+}
+void TootherWindow::cursorToHourglass()
+{
 	if (get_window()) {
 		m_refStdCursor = get_window()->get_cursor();
-	}
-	if (get_window()) {
 		get_window()->set_cursor(m_refWatchCursor);
 	}
-	setSensitivityForState();
-	Glib::signal_timeout().connect_once(sigc::mem_fun(*this, &TootherWindow::onTimeout), nMillisec);
-//std::cout << "TootherWindow::startRefreshing() END" << '\n';
 }
-void TootherWindow::onTimeout()
+void TootherWindow::cursorToNormal()
 {
-	if ((!m_bNeedsRefreshing) && !m_bNeedsEnablingEverything) {
-		return;
-	}
-	if (m_bNeedsRefreshing) {
-		refresh();
-		if (m_refStdCursor) {
-			get_window()->set_cursor(m_refStdCursor);
-		} else if (get_window()) {
-			m_refStdCursor = Gdk::Cursor::create(Gdk::ARROW);
-			get_window()->set_cursor(m_refStdCursor);
-		}
-		m_bNeedsRefreshing = false;
-		setSensitivityForState();
-	} else {
-		assert(m_bNeedsEnablingEverything);
-		HciAdapter* p0Adapter = nullptr;
-		if (m_nSelectedHciId >= 0) {
-			p0Adapter = m_oHciSocket.getAdapter(m_nSelectedHciId);
-			bool bOk = p0Adapter->setAdapterIsUp(true);
-			if (!bOk) {
-				printStringToLog(p0Adapter->getLastError());
-			}
-			bOk = p0Adapter->setDetectable(true);
-			if (!bOk) {
-				printStringToLog(p0Adapter->getLastError());
-			}
-			bOk = p0Adapter->setConnectable(true);
-			if (!bOk) {
-				printStringToLog(p0Adapter->getLastError());
-			}
-		}
-		if (m_refStdCursor) {
-			get_window()->set_cursor(m_refStdCursor);
-		} else if (get_window()) {
-			m_refStdCursor = Gdk::Cursor::create(Gdk::ARROW);
-			get_window()->set_cursor(m_refStdCursor);
-		}
-		m_bNeedsEnablingEverything = false;
-		//
-		startRefreshing(0);
+	if (m_refStdCursor) {
+		get_window()->set_cursor(m_refStdCursor);
+	} else if (get_window()) {
+		m_refStdCursor = Gdk::Cursor::create(Gdk::ARROW);
+		get_window()->set_cursor(m_refStdCursor);
 	}
 }
-void TootherWindow::refresh()
+void TootherWindow::startTimeout(int32_t nStamp, int32_t nMillisec)
 {
-//std::cout << "TootherWindow::refresh()" << '\n';
-	//m_bRefreshing means needs refreshing in next timeout!
-	if (m_bRefreshing) {
-		return;
+	Glib::signal_timeout().connect_once(sigc::bind(sigc::mem_fun(*this, &TootherWindow::onTimeout), nStamp, nMillisec)
+										, nMillisec);
+}
+void TootherWindow::doReceiveString(bool bError, const std::string& sStr)
+{
+//std::cout << "TootherWindow::doReceiveString bError=" << bError << '\n';
+	if (bError) {
+		quitOnFatalError(std::string("Error: ") + sStr);
+		return; //----------------------------------------------------------
 	}
-	const auto& aHciIds = m_oHciSocket.getHciIds();
-	const auto& aFaultyHcis = m_oHciSocket.getFaultyHciIds();
-	m_bRefreshing = true;
-	if (!m_oHciSocket.update()) {
-		printStringToLog(m_oHciSocket.getLastError());
-	} else {
-		if (!aFaultyHcis.empty()) {
-			for (int32_t nHciId : aFaultyHcis) {
-				auto p0Adapter = m_oHciSocket.getAdapter(nHciId);
-				assert(p0Adapter != nullptr);
-				printStringToLog(p0Adapter->getLastError());
-			}
-		}
+	if (!m_bWaitingForReturn) {
+		printStringToLog("Error: received timed out data from server");
+		//TODO maybe message box warning
+		return; //----------------------------------------------------------
 	}
-	if (!m_oBtService.update()) {
-		printStringToLog(m_oBtService.getLastError());
-	}
-	if (aHciIds.size() > 0) {
-		if (m_nSelectedHciId < 0) {
-			m_nSelectedHciId = aHciIds[0];
-		} else { // test whether the selected id still exists
-			const auto itFound = std::find(aHciIds.begin(), aHciIds.end(), m_nSelectedHciId);
-			if (itFound == aHciIds.end()) {
-				m_nSelectedHciId = aHciIds[0];
-			}
-		}
-	} else {
-		m_nSelectedHciId = -1;
-		if (!aFaultyHcis.empty()) {
-			printStringToLog("No healthy bluetooth adapters found!");
-		} else {
-			printStringToLog("No bluetooth adapters found!");
-		}
-	}
-	if (m_nSelectedHciId >= 0) {
-		auto p0Adapter = m_oHciSocket.getAdapter(m_nSelectedHciId);
-		assert(p0Adapter != nullptr);
-		m_p0LabelCurrentAdapter->set_text(std::string("Adapter id: hci") + std::to_string(m_nSelectedHciId));
-		m_p0LabelCurrentAddress->set_text(std::string("Bluetooth address: ") + p0Adapter->getAddress());
-		m_p0CheckButtonHardwareEnabled->set_active(p0Adapter->isHardwareEnabled());
-		m_p0CheckButtonSoftwareEnabled->set_active(p0Adapter->isSoftwareEnabled());
-		m_p0CheckButtonAdapterIsUp->set_active(!p0Adapter->isDown());
-		m_p0EntryAdapterLocalName->set_text(p0Adapter->getLocalName());
-		m_p0CheckButtonAdapterDetectable->set_active(p0Adapter->isDetectable());
-		m_p0CheckButtonAdapterConnectable->set_active(p0Adapter->isConnectable());
-	}
-	m_p0CheckButtonServiceRunning->set_active(m_oBtService.isServiceRunning());
-	const bool bServiceEnabled = m_oBtService.isServiceEnabled();
-	m_p0CheckButtonServiceEnabled->set_active(bServiceEnabled);
+	const json oReturnValue = JsonCommon::parseString(sStr);
+	assert(oReturnValue.is_object());
 	//
-	regenerateAdaptersModel();
-	m_bRefreshing = false;
+	const int32_t nStamp = oReturnValue[JsonCommon::s_sKeyStamp];
+	if (nStamp != m_nStamp) {
+		printStringToLog("Error: received very timed out data from server");
+		//TODO maybe message box warning
+		return; //----------------------------------------------------------
+	}
+	//
+	cursorToNormal();
+	//
+	m_bWaitingForReturn = false;
+	const bool bWaitingForState = m_bWaitingForState;
+	m_bWaitingForState = false;
+	const std::string sRetType = oReturnValue[JsonCommon::s_sKeyReturnType];
+	if (sRetType == JsonCommon::s_sValueReturnTypeError) {
+		//
+		printStringToLog(oReturnValue[JsonCommon::s_sKeyReturnParam]);
+		if (bWaitingForState) {
+			// Refresh error, set state to null!
+			m_oCurState = json{};
+			setWidgetsValue();
+			setWidgetsSensitivity();
+		} else {
+			onButtonRefresh();
+		}
+	} else {
+		assert(sRetType == JsonCommon::s_sValueReturnTypeOk);
+		if (bWaitingForState) {
+			m_oCurState = oReturnValue[JsonCommon::s_sKeyReturnParam];
+			setWidgetsValue();
+			setWidgetsSensitivity();
+		} else {
+			onButtonRefresh();
+		}
+	}
 }
-void TootherWindow::regenerateAdaptersModel()
+void TootherWindow::onTimeout(int32_t nStamp, int32_t nMillisec)
 {
-	if (m_bRegeneratingAdaptersModel) {
+	if (nStamp != m_nStamp) {
+		// mega old timeout
+		return; //----------------------------------------------------------
+	}
+	if (!m_bWaitingForReturn) {
+		// Return json already received
+		return; //----------------------------------------------------------
+	}
+	cursorToNormal();
+	//
+	printStringToLog("Last command timed out (" + std::to_string(nMillisec) + ")!");
+	//TODO message box
+	//
+	m_bWaitingForReturn = false;
+	const bool bWaitingForState = m_bWaitingForState;
+	m_bWaitingForState = false;
+	if (bWaitingForState) {
+		// Refresh error, set state to null!
+		m_oCurState = json{};
+		setWidgetsValue();
+		setWidgetsSensitivity();
+	}
+
+}
+void TootherWindow::onNotebookSwitchPage(Gtk::Widget*, guint nPageNum)
+{
+	if (nPageNum >= s_nTotPages) {
 		return;
 	}
-	m_bRegeneratingAdaptersModel = true;
-	m_refTreeModelAdapters->clear();
-
-	int32_t nSelectedIdx = -1;
-	const auto& aHciIds = m_oHciSocket.getHciIds();
-	const auto nTotHciIds = static_cast<int32_t>(aHciIds.size());
-	for (int32_t nIdx = 0; nIdx < nTotHciIds; ++nIdx) {
-		const int32_t nHciId = aHciIds[nIdx];
-		auto p0Adapter = m_oHciSocket.getAdapter(nHciId);
-		assert(p0Adapter != nullptr);
-		Gtk::TreeModel::Row oAdapterRow;
-		assert(m_refTreeModelAdapters);
-		oAdapterRow = *(m_refTreeModelAdapters->append()); //oGameRow.children()
-		oAdapterRow[m_oAdaptersColumns.m_oColHciName] = p0Adapter->getAdapterName();
-		oAdapterRow[m_oAdaptersColumns.m_oColHiddenHciId] = nHciId;
-		if (nHciId == m_nSelectedHciId) {
-			nSelectedIdx = nIdx;
-		}
-		++nIdx;
-	}
-
-	Glib::RefPtr<Gtk::TreeSelection> refTreeSelection = m_p0TreeViewAdapters->get_selection();
-	Gtk::TreeModel::Path oPath;
-	if (nSelectedIdx >= 0) {
-		oPath.push_back(nSelectedIdx);
-	}
-//std::cout << "   oPath.size=" << oPath.size() << '\n';
-	refTreeSelection->select(oPath);
-
-	m_bRegeneratingAdaptersModel = false;
 }
 
 void TootherWindow::onButtonRefresh()
 {
 //std::cout << "TootherWindow::onButtonRefresh()" << '\n';
-	startRefreshing(0);
+	assert(!m_bWaitingForReturn);
+	startRefreshing(s_nCmdRefreshTimeout);
 }
 void TootherWindow::onAdapterSelectionChanged()
 {
 //std::cout << "TootherWindow::onAdapterSelectionChanged()" << '\n';
-	if (m_bRegeneratingAdaptersModel) {
+	if (m_bSettingWidgetsValues) {
 		return;
 	}
+	assert(!m_bWaitingForReturn);
 	Glib::RefPtr<Gtk::TreeSelection> refTreeSelection = m_p0TreeViewAdapters->get_selection();
 	Gtk::TreeModel::iterator it = refTreeSelection->get_selected();
 	if (it)	{
@@ -439,180 +536,155 @@ void TootherWindow::onAdapterSelectionChanged()
 	} else {
 		m_nSelectedHciId = -1;
 	}
-	startRefreshing(0);
+	setWidgetsValue();
+	setWidgetsSensitivity();
+}
+void TootherWindow::execAdapterBoolCmd(const std::string sCmd, bool bEnabled, int32_t nTimeout)
+{
+	cursorToHourglass();
+
+	m_bWaitingForReturn = true;
+	m_bWaitingForState = false;
+	setWidgetsSensitivity();
+	//
+	++m_nStamp;
+	const json oRoot = JsonCommon::buildCmd(m_nStamp, sCmd, m_nSelectedHciId, bEnabled);
+	sendCmd(oRoot.dump(4));
+	startTimeout(m_nStamp, nTimeout);
+}
+void TootherWindow::execAdapterStringCmd(const std::string sCmd, const std::string& sStr, int32_t nTimeout)
+{
+	cursorToHourglass();
+
+	m_bWaitingForReturn = true;
+	m_bWaitingForState = false;
+	setWidgetsSensitivity();
+	//
+	++m_nStamp;
+	const json oRoot = JsonCommon::buildCmd(m_nStamp, sCmd, m_nSelectedHciId, sStr);
+	sendCmd(oRoot.dump(4));
+	startTimeout(m_nStamp, nTimeout);
 }
 void TootherWindow::onSoftwareEnabledToggled()
 {
-	if (m_bRefreshing) {
-		return; //--------------------------------------------------------------
+	if (m_bSettingWidgetsValues) {
+		return;
 	}
+	assert(!m_bWaitingForReturn);
 	if (m_nSelectedHciId < 0) {
-		return; //--------------------------------------------------------------
-	}
-	auto p0Adapter = m_oHciSocket.getAdapter(m_nSelectedHciId);
-	if (p0Adapter == nullptr) {
 		return; //--------------------------------------------------------------
 	}
 	const bool bEnabled = m_p0CheckButtonSoftwareEnabled->get_active();
-	const bool bOk = p0Adapter->setSoftwareEnabled(bEnabled);
-	if (!bOk) {
-		printStringToLog(p0Adapter->getLastError());
-	}
-	startRefreshing(0);
+	execAdapterBoolCmd(JsonCommon::s_sValueCmdSetAdapterSoftwareEnabled, bEnabled, s_nCmdSetAdapterBoolTimeout);
 }
 void TootherWindow::onAdapterIsUpToggled()
 {
-	if (m_bRefreshing) {
-		return; //--------------------------------------------------------------
+	if (m_bSettingWidgetsValues) {
+		return;
 	}
+	assert(!m_bWaitingForReturn);
 	if (m_nSelectedHciId < 0) {
-		return; //--------------------------------------------------------------
-	}
-	auto p0Adapter = m_oHciSocket.getAdapter(m_nSelectedHciId);
-	if (p0Adapter == nullptr) {
 		return; //--------------------------------------------------------------
 	}
 	const bool bIsUp = m_p0CheckButtonAdapterIsUp->get_active();
-	const bool bOk = p0Adapter->setAdapterIsUp(bIsUp);
-	if (!bOk) {
-		printStringToLog(p0Adapter->getLastError());
-	}
-	startRefreshing(0);
+	execAdapterBoolCmd(JsonCommon::s_sValueCmdSetAdapterIsUp, bIsUp, s_nCmdSetAdapterBoolTimeout);
 }
 bool TootherWindow::onAdapterLocalNameChangedFocus(GdkEventFocus* /*p0Event*/)
 {
-	if (m_bRefreshing) {
+	if (m_bSettingWidgetsValues) {
 		return true; //---------------------------------------------------------
 	}
+	assert(!m_bWaitingForReturn);
 	if (m_nSelectedHciId < 0) {
-		return true; //---------------------------------------------------------
-	}
-	auto p0Adapter = m_oHciSocket.getAdapter(m_nSelectedHciId);
-	if (p0Adapter == nullptr) {
 		return true; //---------------------------------------------------------
 	}
 	const std::string sLocalName = m_p0EntryAdapterLocalName->get_text();
-	if (sLocalName.empty() || (sLocalName.size() > s_nMaxLocalNameSize)) {
-		const auto& sOldName = p0Adapter->getLocalName();
+	if (sLocalName.empty()) {
+		assert(!m_oCurState.is_null());
+
+		// go fetch the old name
+		const auto& oAdapters = m_oCurState[JsonCommon::s_sKeyModelAdapters];
+		assert(oAdapters.is_array());
+		assert(oAdapters.size() > 0);
+		assert(m_nSelectedHciId >= 0);
+		const auto ifFind = std::find_if(oAdapters.begin(), oAdapters.end(), [&](const json& oAdapter) {
+			assert(oAdapter.is_object());
+			assert(oAdapter[JsonCommon::s_sKeyModelAdapterHciId].is_number_integer());
+			return (oAdapter[JsonCommon::s_sKeyModelAdapterHciId] == m_nSelectedHciId);
+		});
+		assert(ifFind != oAdapters.end());
+		const auto& oAdapter = *ifFind;
+		assert(oAdapter[JsonCommon::s_sValueCmdSetAdapterName].is_string());
+		const std::string& sOldName = oAdapter[JsonCommon::s_sValueCmdSetAdapterName];
 		m_p0EntryAdapterLocalName->set_text(sOldName);
 		return true; //---------------------------------------------------------
 	}
-	const bool bOk = p0Adapter->setLocalName(sLocalName);
-	if (!bOk) {
-		printStringToLog(p0Adapter->getLastError());
-	}
-	startRefreshing(0);
+	execAdapterStringCmd(JsonCommon::s_sValueCmdSetAdapterName, sLocalName, s_nCmdSetAdapterNameTimeout);
 	return true;
-}
-void TootherWindow::onAdapterDetectableToggled()
-{
-	if (m_bRefreshing) {
-		return; //--------------------------------------------------------------
-	}
-	if (m_nSelectedHciId < 0) {
-		return; //--------------------------------------------------------------
-	}
-	auto p0Adapter = m_oHciSocket.getAdapter(m_nSelectedHciId);
-	if (p0Adapter == nullptr) {
-		return; //--------------------------------------------------------------
-	}
-	const bool bIsDetectable = m_p0CheckButtonAdapterDetectable->get_active();
-	const bool bOk = p0Adapter->setDetectable(bIsDetectable);
-	if (!bOk) {
-		printStringToLog(p0Adapter->getLastError());
-	}
-	startRefreshing(0);
 }
 void TootherWindow::onAdapterConnectableToggled()
 {
-	if (m_bRefreshing) {
-		return; //--------------------------------------------------------------
+	if (m_bSettingWidgetsValues) {
+		return;
 	}
+	assert(!m_bWaitingForReturn);
 	if (m_nSelectedHciId < 0) {
 		return; //--------------------------------------------------------------
 	}
-	auto p0Adapter = m_oHciSocket.getAdapter(m_nSelectedHciId);
-	if (p0Adapter == nullptr) {
+	const bool bIsConnectable = m_p0CheckButtonAdapterConnectable->get_active();
+	execAdapterBoolCmd(JsonCommon::s_sValueCmdSetAdapterConnectable, bIsConnectable, s_nCmdSetAdapterBoolTimeout);
+}
+void TootherWindow::onAdapterDetectableToggled()
+{
+	if (m_bSettingWidgetsValues) {
+		return;
+	}
+	assert(!m_bWaitingForReturn);
+	if (m_nSelectedHciId < 0) {
 		return; //--------------------------------------------------------------
 	}
-	const bool bIsConnectable = m_p0CheckButtonAdapterConnectable->get_active();
-	const bool bOk = p0Adapter->setConnectable(bIsConnectable);
-	if (!bOk) {
-		printStringToLog(p0Adapter->getLastError());
-	}
-	startRefreshing(0);
+	const bool bIsDetectable = m_p0CheckButtonAdapterDetectable->get_active();
+	execAdapterBoolCmd(JsonCommon::s_sValueCmdSetAdapterDetectable, bIsDetectable, s_nCmdSetAdapterBoolTimeout);
 }
 void TootherWindow::onServiceRunningToggled()
 {
-	if (m_bRefreshing) {
-		return; //--------------------------------------------------------------
+	if (m_bSettingWidgetsValues) {
+		return;
 	}
+	assert(!m_bWaitingForReturn);
 	const bool bServiceRunning = m_p0CheckButtonServiceRunning->get_active();
-	const bool bOk = (bServiceRunning ? m_oBtService.startService() : m_oBtService.stopService());
-	if (!bOk) {
-		printStringToLog(m_oBtService.getLastError());
-	}
-	startRefreshing(s_nRefreshingWaitServiceRunning);
+	execAdapterBoolCmd(JsonCommon::s_sValueCmdSetServiceRunning, bServiceRunning, s_nCmdSetServiceRunningTimeout);
 }
 void TootherWindow::onServiceEnabledToggled()
 {
-//std::cout << "TootherWindow::onServiceEnabledToggled()------------------" << '\n';
-	if (m_bRefreshing) {
-		return; //--------------------------------------------------------------
+	if (m_bSettingWidgetsValues) {
+		return;
 	}
+	assert(!m_bWaitingForReturn);
 	const bool bServiceEnabled = m_p0CheckButtonServiceEnabled->get_active();
-	const bool bOk = m_oBtService.enableService(bServiceEnabled);
-	if (!bOk) {
-		printStringToLog(m_oBtService.getLastError());
-	}
-	startRefreshing(s_nRefreshingWaitServiceEnabling);
+	execAdapterBoolCmd(JsonCommon::s_sValueCmdSetServiceEnabled, bServiceEnabled, s_nCmdSetServiceEnabledTimeout);
 }
 
-void TootherWindow::onButtonTurnAllOn()
+void TootherWindow::sendCmd(const std::string& sStr)
 {
-//std::cout << "TootherWindow::onButtonTurnAllOn()  m_nSelectedHciId=" << m_nSelectedHciId << '\n';
-	if (m_bNeedsEnablingEverything) {
-		return; //--------------------------------------------------------------
-	}
-	if (m_bNeedsRefreshing) {
-		return; //--------------------------------------------------------------
-	}
-	if (m_bRefreshing) {
-		return; //--------------------------------------------------------------
-	}
-	HciAdapter* p0Adapter = nullptr;
-	if (m_nSelectedHciId >= 0) {
-		p0Adapter = m_oHciSocket.getAdapter(m_nSelectedHciId);
-	}
-//std::cout << "TootherWindow::onButtonTurnAllOn()  m_nSelectedHciId=" << m_nSelectedHciId << '\n';
-	if (p0Adapter != nullptr) {
-		const bool bOk = p0Adapter->setSoftwareEnabled(true);
-		if (!bOk) {
-			printStringToLog(p0Adapter->getLastError());
+	int32_t nCount = 0;
+	auto nToWrite = sStr.length() + 1; // include the 0
+	auto p0Str = sStr.c_str();
+	do {
+		const auto nWritten = ::write(m_nCmdPipeFD, p0Str, nToWrite);
+		if (nWritten < 0) {
+			quitOnFatalError(std::string("Error: could not send cmd (error ") + std::to_string(errno) + ")");
+			return; //------------------------------------------------------
 		}
-	}
-	bool bOk = m_oBtService.startService();
-	if (!bOk) {
-		printStringToLog(m_oBtService.getLastError());
-	}
-	bOk = m_oBtService.enableService(true);
-	if (!bOk) {
-		printStringToLog(m_oBtService.getLastError());
-	}
-
-	m_bNeedsEnablingEverything = true;
-	if (get_window()) {
-		m_refStdCursor = get_window()->get_cursor();
-	}
-	if (get_window()) {
-		get_window()->set_cursor(m_refWatchCursor);
-	}
-	setSensitivityForState();
-	Glib::signal_timeout().connect_once(sigc::mem_fun(*this, &TootherWindow::onTimeout), s_nRefreshingWaitServiceRunning);
-//std::cout << "TootherWindow::onButtonTurnAllOn() END" << '\n';
+		p0Str += nWritten;
+		nToWrite -= nWritten;
+		++nCount;
+		if (nCount >= 10) {
+			quitOnFatalError("Error: could not send cmd (cannot write to pipe)");
+			return; //------------------------------------------------------
+		}
+	} while (nToWrite > 0);
 }
-
-
 void TootherWindow::printStringToLog(const std::string& sStr)
 {
 //std::cout << "TootherWindow::printStringToLog " << sStr << '\n';
@@ -627,6 +699,15 @@ void TootherWindow::printStringToLog(const std::string& sStr)
 	m_refTextBufferLog->place_cursor(m_refTextBufferLog->end());
 	m_refTextBufferLog->move_mark(m_refTextBufferMarkBottom, m_refTextBufferLog->end());
 	m_p0TextViewLog->scroll_to(m_refTextBufferMarkBottom, 0.1);
+}
+void TootherWindow::quitOnFatalError(const std::string& sErr)
+{
+	std::cerr << sErr << '\n';
+	Gtk::MessageDialog oDlg(sErr, false
+							, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, false);
+	oDlg.set_transient_for(*this);
+	oDlg.run();
+	TootherWindow::close();
 }
 
 } // namespace stmi

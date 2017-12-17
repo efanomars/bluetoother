@@ -17,7 +17,7 @@
 
 # File:   compileall.py
 
-# - compiles and installs all the project contained in this source package
+# - compiles and installs the project contained in this source package
 #   for both Debug and Release configurations
 # - makes sure no line in the code starts with std::cout
 # - optionally calls clang-llvm sanitizer

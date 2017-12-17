@@ -21,8 +21,8 @@
 #ifndef STMI_TOOTHER_WINDOW_H
 #define STMI_TOOTHER_WINDOW_H
 
-#include "btservice.h"
-#include "hcisocket.h"
+#include "toothersources.h"
+#include "jsoncommon.h"
 
 #include <gtkmm.h>
 
@@ -34,7 +34,7 @@ namespace stmi
 class TootherWindow : public Gtk::Window
 {
 public:
-	TootherWindow(const std::string& sTitle, BtService& oBtService, HciSocket& oHciSocket);
+	TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nReturnPipeFD);
 	virtual ~TootherWindow();
 
 private:
@@ -51,21 +51,30 @@ private:
 	void onServiceEnabledToggled();
 
 	void onButtonRefresh();
-	void onButtonTurnAllOn();
+
+	void doReceiveString(bool bError, const std::string& sStr);
 
 	void startRefreshing(int32_t nMillisec);
-	void onTimeout();
-	void refresh();
+	void startTimeout(int32_t nStamp, int32_t nMillisec);
+	void onTimeout(int32_t nStamp, int32_t nMillisec);
 
-	void setSensitivityForState();
+	void setWidgetsValue();
+	void setWidgetsSensitivity();
+	void execAdapterBoolCmd(const std::string sCmd, bool bEnabled, int32_t nTimeout);
+	void execAdapterStringCmd(const std::string sCmd, const std::string& sStr, int32_t nTimeout);
+	void sendCmd(const std::string& sStr);
 
-	void regenerateAdaptersModel();
+	void cursorToHourglass();
+	void cursorToNormal();
 
 	void printStringToLog(const std::string& sStr);
 
+	void quitOnFatalError(const std::string& sErr);
+
 private:
-	BtService& m_oBtService;
-	HciSocket& m_oHciSocket;
+	int m_nCmdPipeFD;
+
+	Glib::RefPtr<PipeInputSource> m_refPipeInputSource;
 
 	static constexpr int32_t s_nTotPages = 3;
 	int32_t m_aPageIndex[s_nTotPages];
@@ -97,8 +106,6 @@ private:
 
 			Gtk::CheckButton* m_p0CheckButtonServiceRunning;
 			Gtk::CheckButton* m_p0CheckButtonServiceEnabled;
-
-			Gtk::Button* m_p0ButtonTurnAllOn;
 
 		static const int32_t s_nTabLog = 1;
 		//Gtk::Label* m_p0TabLabelLog;
@@ -133,11 +140,11 @@ private:
 
 	int32_t m_nSelectedHciId;
 
-	bool m_bNeedsRefreshing;
-	bool m_bNeedsEnablingEverything;
-
-	bool m_bRefreshing;
-	bool m_bRegeneratingAdaptersModel;
+	int32_t m_nStamp;
+	bool m_bWaitingForReturn;
+	bool m_bWaitingForState; // (m_bWaitingForState == true) implies (m_bWaitingForReturn == true)
+	json m_oCurState;
+	bool m_bSettingWidgetsValues;
 
 	Glib::RefPtr<Gdk::Cursor> m_refStdCursor;
 	Glib::RefPtr<Gdk::Cursor> m_refWatchCursor;
@@ -147,8 +154,12 @@ private:
 
 	static constexpr int32_t s_nMaxLocalNameSize = 200;
 
-	static constexpr int32_t s_nRefreshingWaitServiceRunning = 2500; // millisec
-	static constexpr int32_t s_nRefreshingWaitServiceEnabling = 500; // millisec
+	static constexpr int32_t s_nCmdRefreshTimeout = 3000; // millisec
+	static constexpr int32_t s_nCmdSetAdapterBoolTimeout = 2000; // millisec
+	static constexpr int32_t s_nCmdSetAdapterNameTimeout = 2000; // millisec
+	static constexpr int32_t s_nCmdSetServiceRunningTimeout = 5000; // millisec
+	static constexpr int32_t s_nCmdSetServiceEnabledTimeout = 4000; // millisec
+	static constexpr int32_t s_nCmdTurnAllOnTimeout = 10000; // millisec
 private:
 	TootherWindow() = delete;
 };

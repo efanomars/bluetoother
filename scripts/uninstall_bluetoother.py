@@ -30,13 +30,16 @@ def main():
 						, default=False, dest="bRemoveBuilds")
 	oParser.add_argument("-y", "--no-prompt", help="No prompt comfirmation", action="store_true"\
 						, default=False, dest="bNoPrompt")
-	oParser.add_argument("--destdir", help="install dir (default=/usr/local)", metavar='DESTDIR'\
+	oParser.add_argument("--destdir", help="install prefix (default=/usr/local)", metavar='DESTDIR'\
 						, default="/usr/local", dest="sDestDir")
+	oParser.add_argument("--polkitdir", help="polkit prefix (default=/usr)", metavar='POLKITDIR'\
+						, default="/usr", dest="sPolkitDir")
 	oParser.add_argument("--no-sudo", help="don't use sudo to uninstall", action="store_true"\
 						, default=False, dest="bDontSudo")
 	oArgs = oParser.parse_args()
 
 	sDestDir = os.path.abspath(oArgs.sDestDir)
+	sPolkitDir = os.path.abspath(oArgs.sPolkitDir)
 
 	sScriptDir = os.path.dirname(os.path.abspath(__file__))
 	os.chdir(sScriptDir)
@@ -67,6 +70,7 @@ def main():
 	subprocess.check_call("{} rm -r -f {}/share/icons/hicolor/scalable/apps/bluetoother.svg".format(sSudo, sDestDir).split())
 	subprocess.check_call("{} rm -r -f {}/share/applications/bluetoother.desktop".format(sSudo, sDestDir).split())
 
+	subprocess.check_call("{} rm -r -f {}/share/polkit-1/actions/com.github.efanomars.bluetoother.policy".format(sSudo, sPolkitDir).split())
 	if oArgs.bRemoveBuilds:
 		os.chdir("..")
 		subprocess.check_call("{} rm -r -f bluetoother/build".format(sSudo).split())

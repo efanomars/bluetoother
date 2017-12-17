@@ -36,9 +36,6 @@ using std::unique_ptr;
 class BtService
 {
 public:
-	/** Constructor.
-	 * @param nHciId The id of the device.
-	 */
 	BtService();
 
 	// returns false if errors, use getLastError()

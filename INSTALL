@@ -8,7 +8,8 @@ g++ compiler or compatible (>= C++14)
 libgtkmm-3.0-dev
 libbluetooth-dev
 
-At runtime bluetoother might need the gksu package to be started.
+At runtime bluetoother needs the pkexec command (usually installed
+by the policikit-1 package) to be started.
 In order to work the Linux distro must support systemd and rfkill.
 
 

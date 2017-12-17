@@ -29,8 +29,10 @@ def main():
 	oParser.add_argument("-b", "--buildtype", help="build type (default=Release)"\
 						, choices=['Debug', 'Release', 'MinSizeRel', 'RelWithDebInfo']\
 						, default="Release", dest="sBuildType")
-	oParser.add_argument("--destdir", help="install dir (default=/usr/local)", metavar='DESTDIR'\
+	oParser.add_argument("--destdir", help="install prefix (default=/usr/local)", metavar='DESTDIR'\
 						, default="/usr/local", dest="sDestDir")
+	oParser.add_argument("--polkitdir", help="polkit prefix (default=/usr)", metavar='POLKITDIR'\
+						, default="/usr", dest="sPolkitDir")
 	oParser.add_argument("--no-sudo", help="don't use sudo to install", action="store_true"\
 						, default=False, dest="bDontSudo")
 	oParser.add_argument("--no-icons", help="don't install icons (implies --no-launcher)", action="store_true"\
@@ -40,6 +42,7 @@ def main():
 	oArgs = oParser.parse_args()
 
 	sDestDir = os.path.abspath(oArgs.sDestDir)
+	sPolkitDir = os.path.abspath(oArgs.sPolkitDir)
 
 	sScriptDir = os.path.dirname(os.path.abspath(__file__))
 	#print("sScriptDir:" + sScriptDir)
@@ -49,6 +52,9 @@ def main():
 	sDestDir = "-D CMAKE_INSTALL_PREFIX=" + sDestDir
 	#print("sDestDir:" + sDestDir)
 	#
+	sPolkitDir = "-D STMM_POLKIT_POLICY_INSTALL_PREFIX=" + sPolkitDir
+	#print("sPolkitDir:" + sPolkitDir)
+	#
 	sBuildType = "-D CMAKE_BUILD_TYPE=" + oArgs.sBuildType
 	#print("sBuildType:" + sBuildType)
 
@@ -56,9 +62,6 @@ def main():
 		sSudo = ""
 	else:
 		sSudo = "sudo"
-
-	if not os.path.isdir("build"):
-		os.mkdir("build")
 
 	sInstallIcons = "-D STMM_INSTALL_ICONS="
 	if (oArgs.bNoIcons):
@@ -73,9 +76,12 @@ def main():
 	else:
 		sInstallLauncher += "ON"
 
+	if not os.path.isdir("build"):
+		os.mkdir("build")
+
 	os.chdir("build")
 
-	subprocess.check_call("cmake {} {} {} {} ..".format(sBuildType, sDestDir, sInstallIcons, sInstallLauncher).split())
+	subprocess.check_call("cmake {} {} {} {} {} ..".format(sBuildType, sDestDir, sPolkitDir, sInstallIcons, sInstallLauncher).split())
 	subprocess.check_call("make $STMM_MAKE_OPTIONS", shell=True)
 	subprocess.check_call("{} make install".format(sSudo).split())
 

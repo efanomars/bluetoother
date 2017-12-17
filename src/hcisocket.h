@@ -35,9 +35,6 @@ using std::unique_ptr;
 class HciSocket
 {
 public:
-	/** Constructor.
-	 * @param nHciId The id of the device.
-	 */
 	HciSocket();
 	~HciSocket();
 

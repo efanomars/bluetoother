@@ -6,6 +6,6 @@ Terminal=false
 Categories=Utility;
 Encoding=UTF-8
 Comment=Bluetooth adapter connectivity
-Exec=gksu bluetoother
+Exec=pkexec bluetoother
 GenericName=Bluetooth management
 Name[en_US]=Bluetoother

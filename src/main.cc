@@ -18,11 +18,9 @@
  * File:   main.cc
  */
 
-#include "hcisocket.h"
-#include "btservice.h"
-
 #include "config.h"
 #include "tootherwindow.h"
+#include "tootherserver.h"
 
 #include <gtkmm.h>
 
@@ -30,6 +28,8 @@
 #include <iostream>
 
 #include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
 
 namespace stmi
 {
@@ -47,69 +47,140 @@ void printUsage()
 	std::cout << "  -v --version           Prints version." << '\n';
 }
 
-int bluetootherMain(int argc, char** argv)
+int startGUIClient(int nCmdPipe, int nReturnPipe, int nArgC, char** aArgV)
 {
-	char* argvZeroSave = ((argc >= 1) ? argv[0] : nullptr);
-	while (argc >= 2) {
-		auto nOldArgC = argc;
-		if ((strcmp("--version", argv[1]) == 0) || (strcmp("-v", argv[1]) == 0)) {
-			printVersion();
-			return EXIT_SUCCESS; //---------------------------------------------
-		}
-		if ((strcmp("--help", argv[1]) == 0) || (strcmp("-h", argv[1]) == 0)) {
-			printUsage();
-			return EXIT_SUCCESS; //---------------------------------------------
-		}
-		//bool bOk = evalArg(argc, argv, "--interval", "-i", nInterval);
-		//if (!bOk) {
-		//	return EXIT_FAILURE; //---------------------------------------------
-		//}
-		if (nOldArgC == argc) {
-			std::cout << "Unknown argument: " << std::string(argv[1]) << '\n';
-			return EXIT_FAILURE; //---------------------------------------------
-		}
-		argv[0] = argvZeroSave;
-	}
-
 	const Glib::ustring sAppName = "com.github.efanomars.bluetoother";
 	const Glib::ustring sWindoTitle = "bluetoother " + Config::getVersionString();
 
 	Glib::RefPtr<Gtk::Application> refApp;
 	try {
 		//
-		refApp = Gtk::Application::create(argc, argv, sAppName);
+		refApp = Gtk::Application::create(nArgC, aArgV, sAppName);
 	} catch (const std::runtime_error& oErr) {
 		std::cout << "Error: " << oErr.what() << '\n';
 		return EXIT_FAILURE; //-------------------------------------------------
 	}
-	if (getuid() != 0) {
-		// not root
-		
-		// Gtk::MessageDialog oDlg("Starting \"bluetoother\" without administrative privileges.\n"
-		// 						"Some of the functions might not work correctly.\n"
-		// 						"It's recommended to use sudo or gksu to start this program.", false
-		// 						, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, false);
- 		Gtk::MessageDialog oDlg("This program needs administrative privileges.\n"
-								"Please start it with either\n"
-								"'sudo bluetoother' or 'gksu bluetoother'.", false
- 								, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, false);
-		oDlg.run();
- 		return EXIT_FAILURE; //-------------------------------------------------
-	}
-	// service
-	BtService oService{};
-	// hci model
-	HciSocket oSocket{};
-
-	TootherWindow oWindow(sWindoTitle, oService, oSocket);
+// 	if (geteuid() != 0) {
+// 		// not root
+// 		// Gtk::MessageDialog oDlg("Starting \"bluetoother\" without administrative privileges.\n"
+// 		// 						"Some of the functions might not work correctly.\n"
+// 		// 						"It's recommended to use sudo or gksu to start this program.", false
+// 		// 						, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, false);
+// 		Gtk::MessageDialog oDlg("This program needs administrative privileges.\n"
+// 								"Please start it with either\n"
+// 								"'sudo bluetoother' or 'gksu bluetoother'.", false
+// 								, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, false);
+// 		oDlg.run();
+// 		return EXIT_FAILURE; //-------------------------------------------------
+// 	}
+	TootherWindow oWindow(sWindoTitle, nCmdPipe, nReturnPipe);
 	const auto nRet = refApp->run(oWindow);
 	return nRet;
+}
+int startRootServer(int nCmdPipe, int nReturnPipe)
+{
+	TootherServer oServer(nCmdPipe, nReturnPipe);
+	return oServer.run();
+}
+
+int bluetootherMain(int nArgC, char** aArgV)
+{
+	char* aArgVZeroSave = ((nArgC >= 1) ? aArgV[0] : nullptr);
+	while (nArgC >= 2) {
+		auto nOldArgC = nArgC;
+		if ((strcmp("--version", aArgV[1]) == 0) || (strcmp("-v", aArgV[1]) == 0)) {
+			printVersion();
+			return EXIT_SUCCESS; //---------------------------------------------
+		}
+		if ((strcmp("--help", aArgV[1]) == 0) || (strcmp("-h", aArgV[1]) == 0)) {
+			printUsage();
+			return EXIT_SUCCESS; //---------------------------------------------
+		}
+		if (nOldArgC == nArgC) {
+			std::cerr << "Unknown argument: " << std::string(aArgV[1]) << '\n';
+			return EXIT_FAILURE; //---------------------------------------------
+		}
+		aArgV[0] = aArgVZeroSave;
+	}
+
+	int32_t nUID = -1;
+	char* p0UserName = getenv("PKEXEC_UID");
+	if (p0UserName != nullptr) {
+		try {
+			nUID = std::stoi(p0UserName);
+		} catch (std::invalid_argument ) {
+			std::cerr << "Error: PKEXEC_UID invalid value. Please start this program with pkexec" << '\n';
+		} catch (std::out_of_range ) {
+			std::cerr << "Error: PKEXEC_UID invalid value. Please start this program with pkexec" << '\n';
+		}
+	}
+	if (nUID < 0) {
+		std::cerr << "Error: PKEXEC_UID invalid value. Please start this program with pkexec" << '\n';
+		return EXIT_FAILURE; //-------------------------------------------------
+	}
+	const auto p0Passw = getpwuid(nUID);
+	if (p0Passw == nullptr) {
+		std::cerr << "Error: getpwuid couldn't find user '" << nUID << "'" << '\n';
+		return EXIT_FAILURE; //-------------------------------------------------
+	}
+	const auto nGID = p0Passw->pw_gid;
+	const auto nEffectiveUID = ::geteuid();
+	if (nEffectiveUID != 0) {
+		std::cerr << "Error: effective user must be root (user id 0)." << '\n';
+		return EXIT_FAILURE; //-------------------------------------------------
+	}
+	pid_t oPid;
+	int aCmdPipe[2];    // 0: read  1:write
+	int aReturnPipe[2]; // 0: read  1:write
+
+	// Create the pipes.
+	if (::pipe(aCmdPipe)) {
+		std::cerr << "Cmd pipe failed." << '\n';
+		return EXIT_FAILURE; //-------------------------------------------------
+	}
+	if (::pipe(aReturnPipe)) {
+		std::cerr << "Return pipe failed." << '\n';
+		return EXIT_FAILURE; //-------------------------------------------------
+	}
+
+	// Create the child process.
+	oPid = ::fork();
+	if (oPid == static_cast<pid_t>(0)) {
+		// This is the child process.
+		// Close other end first.
+		::close(aCmdPipe[1]);
+		::close(aReturnPipe[0]);
+		//::setuid(nEffectiveUID); // nor really necessary?
+		return startRootServer(aCmdPipe[0], aReturnPipe[1]); //-----------------
+	} else if (oPid < static_cast<pid_t>(0)) {
+		// The fork failed.
+		std::cerr << "Fork failed." << '\n';
+		return EXIT_FAILURE; //-------------------------------------------------
+	} else {
+		// This is the parent process.
+		// Close other end first.
+		::close(aCmdPipe[0]);
+		::close(aReturnPipe[1]);
+		//
+		auto nRet = ::setgid(nGID);
+		if (nRet == -1) {
+			std::cerr << "Error: " << errno << ". Couldn't set group id to " << nGID << "." << '\n';
+			return EXIT_FAILURE; //---------------------------------------------
+		}
+		nRet = ::setuid(nUID);
+		if (nRet == -1) {
+			std::cerr << "Error: " << errno << ". Couldn't set user id to " << nUID << "." << '\n';
+			return EXIT_FAILURE; //---------------------------------------------
+		}
+		//
+		return startGUIClient(aCmdPipe[1], aReturnPipe[0], nArgC, aArgV); //----
+	}
 }
 
 } // namespace stmi
 
-int main(int argc, char** argv)
+int main(int nArgC, char** aArgV)
 {
-	return stmi::bluetootherMain(argc, argv);
+	return stmi::bluetootherMain(nArgC, aArgV);
 }
 
