@@ -26,19 +26,17 @@ From this directory execute the following commands:
 Instead of 'Release' CMAKE_BUILD_TYPE can also be set to
    'Debug', 'MinSizeRel' or 'RelWithDebInfo'.
 To change the default installation directory add definition
-   '-D CMAKE_INSTALL_PREFIX=/home/adam/mybin'  to the preceding command.
+   '-D CMAKE_INSTALL_PREFIX=/usr/local'  to the preceding command.
 
   $ make
 
   $ sudo make install
 
-sudo might be omitted if installing to a directory owned by the current user.
-
 
 
 Alternatively you can just execute the script
 
-  $ ./scripts/install_bluetoother.py  -b Release  --destdir /home/adam/bin
+  $ ./scripts/install_bluetoother.py  -b Release  --destdir /usr
 
 setting the parameter(s) to your preferred value (like above).
 
