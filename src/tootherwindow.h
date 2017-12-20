@@ -89,8 +89,9 @@ private:
 				Gtk::Button* m_p0ButtonRefresh;
 				Gtk::TreeView* m_p0TreeViewAdapters;
 
-			Gtk::Label* m_p0LabelCurrentAdapter;
-			Gtk::Label* m_p0LabelCurrentAddress;
+			//Gtk::Box* m_p0VBoxCurrentAdapter
+				Gtk::Label* m_p0LabelCurrentAdapter;
+				Gtk::Label* m_p0LabelCurrentAddress;
 
 			Gtk::CheckButton* m_p0CheckButtonHardwareEnabled;
 			Gtk::CheckButton* m_p0CheckButtonSoftwareEnabled;
@@ -123,9 +124,11 @@ private:
 		AdaptersColumns()
 		{
 			add(m_oColHciName);
+			add(m_oColHciId);
 			add(m_oColHiddenHciId);
 		}
 		Gtk::TreeModelColumn<std::string> m_oColHciName;
+		Gtk::TreeModelColumn<std::string> m_oColHciId;
 		Gtk::TreeModelColumn<int32_t> m_oColHiddenHciId;
 	};
 	AdaptersColumns m_oAdaptersColumns;

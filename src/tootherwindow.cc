@@ -114,15 +114,20 @@ TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nRet
 			m_refTreeModelAdapters = Gtk::TreeStore::create(m_oAdaptersColumns);
 			m_p0TreeViewAdapters = Gtk::manage(new Gtk::TreeView(m_refTreeModelAdapters));
 			m_p0HBoxRefreshAdapters->pack_start(*m_p0TreeViewAdapters, true, true);
-				m_p0TreeViewAdapters->append_column("Adapter id", m_oAdaptersColumns.m_oColHciName);
+				m_p0TreeViewAdapters->append_column("Adapter name", m_oAdaptersColumns.m_oColHciName);
+				m_p0TreeViewAdapters->append_column("id", m_oAdaptersColumns.m_oColHciId);
 				refTreeSelection = m_p0TreeViewAdapters->get_selection();
 				refTreeSelection->signal_changed().connect(
 								sigc::mem_fun(*this, &TootherWindow::onAdapterSelectionChanged));
 
-		m_p0LabelCurrentAdapter = Gtk::manage(new Gtk::Label("Bluetooth adapter:"));
-		m_p0VBoxMain->pack_start(*m_p0LabelCurrentAdapter, false, false);
-		m_p0LabelCurrentAddress = Gtk::manage(new Gtk::Label("Address:"));
-		m_p0VBoxMain->pack_start(*m_p0LabelCurrentAddress, false, false);
+		Gtk::Box* m_p0VBoxCurrentAdapter = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_VERTICAL));
+		m_p0VBoxMain->pack_start(*m_p0VBoxCurrentAdapter, false, false);
+			m_p0VBoxCurrentAdapter->set_border_width(5);
+
+			m_p0LabelCurrentAdapter = Gtk::manage(new Gtk::Label("Bluetooth adapter:"));
+			m_p0VBoxCurrentAdapter->pack_start(*m_p0LabelCurrentAdapter, false, false);
+			m_p0LabelCurrentAddress = Gtk::manage(new Gtk::Label("Address:"));
+			m_p0VBoxCurrentAdapter->pack_start(*m_p0LabelCurrentAddress, false, false);
 
 		m_p0CheckButtonHardwareEnabled = Gtk::manage(new Gtk::CheckButton("Hardware enabled (RfKill)"));
 		m_p0VBoxMain->pack_start(*m_p0CheckButtonHardwareEnabled, false, false);
@@ -244,6 +249,8 @@ void TootherWindow::setWidgetsValue()
 					m_nSelectedHciId = oAdapter[JsonCommon::s_sKeyModelAdapterHciId];
 				}
 			}
+		} else {
+			m_nSelectedHciId = -1;
 		}
 		int32_t nIdx = 0;
 		for (const auto& oAdapter : oAdapters) {
@@ -255,7 +262,8 @@ void TootherWindow::setWidgetsValue()
 			oAdapterRow = *(m_refTreeModelAdapters->append()); //oGameRow.children()
 			assert(oAdapter[JsonCommon::s_sKeyModelAdapterName].is_string());
 			const std::string& sLocalName = oAdapter[JsonCommon::s_sKeyModelAdapterName];
-			oAdapterRow[m_oAdaptersColumns.m_oColHciName] = sLocalName;
+			oAdapterRow[m_oAdaptersColumns.m_oColHciName] = (sLocalName.empty() ? "(unknown)" : sLocalName);
+			oAdapterRow[m_oAdaptersColumns.m_oColHciId] = std::string("hci") + std::to_string(nHciId);
 			oAdapterRow[m_oAdaptersColumns.m_oColHiddenHciId] = nHciId;
 			//
 			if (nHciId == m_nSelectedHciId) {
@@ -318,6 +326,9 @@ void TootherWindow::setWidgetsValue()
 				bIsDetectable = oAdapter[JsonCommon::s_sKeyModelAdapterDetectable];
 			}
 		}
+	} else {
+		m_p0LabelCurrentAdapter->set_text("Adapter id:");
+		m_p0LabelCurrentAddress->set_text("Bluetooth address:");
 	}
 	if (bStateOk) {
 		assert(m_oCurState[JsonCommon::s_sKeyModelServiceRunning].is_boolean());

@@ -17,7 +17,7 @@
 
 # File:   checktidy.py
 
-# Use this command to check all stmm-input-bt related projects with clang-tidy.
+# Use this command to check the bluetoother project with clang-tidy.
 
 import sys
 import os

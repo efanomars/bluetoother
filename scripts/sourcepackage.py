@@ -17,7 +17,7 @@
 
 # File:   sourcepackage.py
 
-# Creates a source package containing all stmm-input-bt related projects.
+# Creates a source package for the bluetoother project.
 
 import sys
 import os

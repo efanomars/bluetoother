@@ -47,8 +47,40 @@ void printUsage()
 	std::cout << "  -v --version           Prints version." << '\n';
 }
 
+	// // The following avoids the initial delay of the
+	// // main window, but I have no idea why.
+	// class InvisibleWindow : public Gtk::Dialog
+	// {
+	// protected:
+	// 	void on_realize() override
+	// 	{
+	// 		hide();
+	// 	}
+	// };
+
 int startGUIClient(int nCmdPipe, int nReturnPipe, int nArgC, char** aArgV)
 {
+	// // The following avoids the initial delay of the
+	// // main window, but I have no idea why.
+	// pid_t oPid;
+	// oPid = ::fork();
+	// if (oPid == static_cast<pid_t>(0)) {
+	// 	Glib::RefPtr<Gtk::Application> refApp;
+	// 	try {
+	// 		//
+	// 		refApp = Gtk::Application::create(nArgC, aArgV, "XXX.YYY.ZZZ");
+	// 	} catch (const std::runtime_error& oErr) {
+	// 		std::cout << "Error: " << oErr.what() << '\n';
+	// 		return EXIT_FAILURE; //---------------------------------------------
+	// 	}
+	// 	InvisibleWindow oW;
+	// 	return refApp->run(oW); //----------------------------------------------
+	// } else if (oPid < static_cast<pid_t>(0)) {
+	// 	std::cerr << "Fork failed." << '\n';
+	// 	return EXIT_FAILURE; //-------------------------------------------------
+	// }
+	// ///////
+
 	const Glib::ustring sAppName = "com.github.efanomars.bluetoother";
 	const Glib::ustring sWindoTitle = "bluetoother " + Config::getVersionString();
 
@@ -60,19 +92,6 @@ int startGUIClient(int nCmdPipe, int nReturnPipe, int nArgC, char** aArgV)
 		std::cout << "Error: " << oErr.what() << '\n';
 		return EXIT_FAILURE; //-------------------------------------------------
 	}
-// 	if (geteuid() != 0) {
-// 		// not root
-// 		// Gtk::MessageDialog oDlg("Starting \"bluetoother\" without administrative privileges.\n"
-// 		// 						"Some of the functions might not work correctly.\n"
-// 		// 						"It's recommended to use sudo or gksu to start this program.", false
-// 		// 						, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, false);
-// 		Gtk::MessageDialog oDlg("This program needs administrative privileges.\n"
-// 								"Please start it with either\n"
-// 								"'sudo bluetoother' or 'gksu bluetoother'.", false
-// 								, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, false);
-// 		oDlg.run();
-// 		return EXIT_FAILURE; //-------------------------------------------------
-// 	}
 	TootherWindow oWindow(sWindoTitle, nCmdPipe, nReturnPipe);
 	const auto nRet = refApp->run(oWindow);
 	return nRet;
