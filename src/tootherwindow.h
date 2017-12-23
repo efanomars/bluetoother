@@ -23,6 +23,7 @@
 
 #include "toothersources.h"
 #include "jsoncommon.h"
+#include "namedialog.h"
 
 #include <gtkmm.h>
 
@@ -44,13 +45,13 @@ private:
 	void onSoftwareEnabledToggled();
 
 	void onAdapterIsUpToggled();
-	bool onAdapterLocalNameChangedFocus(GdkEventFocus* /*p0Event*/);
 	void onAdapterDetectableToggled();
 	void onAdapterConnectableToggled();
 	void onServiceRunningToggled();
 	void onServiceEnabledToggled();
 
 	void onButtonRefresh();
+	void onButtonSetName();
 
 	void doReceiveString(bool bError, const std::string& sStr);
 
@@ -87,11 +88,11 @@ private:
 
 			//Gtk::Box* m_p0HBoxRefreshAdapters;
 				Gtk::Button* m_p0ButtonRefresh;
-				Gtk::TreeView* m_p0TreeViewAdapters;
-
-			//Gtk::Box* m_p0VBoxCurrentAdapter
-				Gtk::Label* m_p0LabelCurrentAdapter;
-				Gtk::Label* m_p0LabelCurrentAddress;
+				//Gtk::Box* m_p0VBoxTreeAndCurrentAdapter
+					Gtk::TreeView* m_p0TreeViewAdapters;
+					//Gtk::Box* m_p0VBoxCurrentAdapter
+						Gtk::Label* m_p0LabelCurrentAdapter;
+						Gtk::Label* m_p0LabelCurrentAddress;
 
 			Gtk::CheckButton* m_p0CheckButtonHardwareEnabled;
 			Gtk::CheckButton* m_p0CheckButtonSoftwareEnabled;
@@ -99,7 +100,7 @@ private:
 			Gtk::CheckButton* m_p0CheckButtonAdapterIsUp;
 
 			//Gtk::Box* m_p0HBoxLocalName;
-				//Gtk::Label* m_p0LabelLocalName;
+				Gtk::Button* m_p0ButtonAdapterSetLocalName;
 				Gtk::Entry* m_p0EntryAdapterLocalName;
 
 			Gtk::CheckButton* m_p0CheckButtonAdapterConnectable;
@@ -141,6 +142,8 @@ private:
 
 	Glib::RefPtr<Gtk::TextBuffer> m_refTextBufferInfo;
 
+	Glib::RefPtr<NameDialog> m_refNameDialog;
+
 	int32_t m_nSelectedHciId;
 
 	int32_t m_nStamp;
@@ -153,9 +156,10 @@ private:
 	Glib::RefPtr<Gdk::Cursor> m_refWatchCursor;
 
 	static constexpr int32_t s_nInitialWindowSizeW = 350;
-	static constexpr int32_t s_nInitialWindowSizeH = 250;
+	static constexpr int32_t s_nInitialWindowSizeH = 230;
 
-	static constexpr int32_t s_nMaxLocalNameSize = 200;
+	static constexpr int32_t s_nMaxLocalNameSize = 100;
+	static constexpr int32_t s_nTruncLocalNameSize = 25;
 
 	static constexpr int32_t s_nCmdRefreshTimeout = 3000; // millisec
 	static constexpr int32_t s_nCmdSetAdapterBoolTimeout = 2000; // millisec

@@ -42,7 +42,7 @@ using json = nlohmann::json;
 class TootherServer
 {
 public:
-	TootherServer(int nCmdPipeFD, int nReturnPipeFD);
+	TootherServer(int nCmdPipeFD, int nReturnPipeFD, bool bPrintOutServerErrors);
 	int run();
 
 private:
@@ -85,6 +85,7 @@ private:
 	json getState();
 private:
 	int m_nReturnPipeFD;
+	bool m_bPrintOutServerErrors;
 
 	Glib::RefPtr<Glib::MainLoop> m_refML;
 

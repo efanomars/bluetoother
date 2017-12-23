@@ -56,6 +56,8 @@ set(STMMI_BTER_SOURCES
         ${PROJECT_SOURCE_DIR}/src/jsoncommon.cc
         ${PROJECT_SOURCE_DIR}/src/json.hpp
         ${PROJECT_SOURCE_DIR}/src/main.cc
+        ${PROJECT_SOURCE_DIR}/src/namedialog.h
+        ${PROJECT_SOURCE_DIR}/src/namedialog.cc
         ${PROJECT_SOURCE_DIR}/src/tootherserver.h
         ${PROJECT_SOURCE_DIR}/src/tootherserver.cc
         ${PROJECT_SOURCE_DIR}/src/toothersources.h

@@ -27,8 +27,9 @@
 namespace stmi
 {
 
-TootherServer::TootherServer(int nCmdPipeFD, int nReturnPipeFD)
+TootherServer::TootherServer(int nCmdPipeFD, int nReturnPipeFD, bool bPrintOutServerErrors)
 : m_nReturnPipeFD(nReturnPipeFD)
+, m_bPrintOutServerErrors(bPrintOutServerErrors)
 {
 	m_refML = Glib::MainLoop::create();
 
@@ -45,6 +46,9 @@ void TootherServer::doReceiveString(bool bError, const std::string& sStr)
 {
 //std::cout << "TootherServer::doReceiveString bError=" << bError << " " << sStr << '\n';
 	if (bError) {
+		if (m_bPrintOutServerErrors) {
+			std::cerr << "Server error: " << sStr << '\n';
+		}
 		m_refML->quit();
 		return; //----------------------------------------------------------
 	}
@@ -94,7 +98,9 @@ void TootherServer::sendReturn(const std::string& sStr)
 //std::cout << "TootherServer::sendReturn pipe:" << m_nReturnPipeFD << " count:" << nCount << "  nToWrite=" << nToWrite << '\n';
 		const auto nWritten = ::write(m_nReturnPipeFD, p0Str, nToWrite);
 		if (nWritten < 0) {
-			std::cerr << "Error: could not send return value (error " << errno << ")" << '\n';
+			if (m_bPrintOutServerErrors) {
+				std::cerr << "Server error: could not send return value (error " << errno << ")" << '\n';
+			}
 			m_refML->quit();
 			return; //------------------------------------------------------
 		}

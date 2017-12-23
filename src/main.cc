@@ -47,40 +47,8 @@ void printUsage()
 	std::cout << "  -v --version           Prints version." << '\n';
 }
 
-	// // The following avoids the initial delay of the
-	// // main window, but I have no idea why.
-	// class InvisibleWindow : public Gtk::Dialog
-	// {
-	// protected:
-	// 	void on_realize() override
-	// 	{
-	// 		hide();
-	// 	}
-	// };
-
 int startGUIClient(int nCmdPipe, int nReturnPipe, int nArgC, char** aArgV)
 {
-	// // The following avoids the initial delay of the
-	// // main window, but I have no idea why.
-	// pid_t oPid;
-	// oPid = ::fork();
-	// if (oPid == static_cast<pid_t>(0)) {
-	// 	Glib::RefPtr<Gtk::Application> refApp;
-	// 	try {
-	// 		//
-	// 		refApp = Gtk::Application::create(nArgC, aArgV, "XXX.YYY.ZZZ");
-	// 	} catch (const std::runtime_error& oErr) {
-	// 		std::cout << "Error: " << oErr.what() << '\n';
-	// 		return EXIT_FAILURE; //---------------------------------------------
-	// 	}
-	// 	InvisibleWindow oW;
-	// 	return refApp->run(oW); //----------------------------------------------
-	// } else if (oPid < static_cast<pid_t>(0)) {
-	// 	std::cerr << "Fork failed." << '\n';
-	// 	return EXIT_FAILURE; //-------------------------------------------------
-	// }
-	// ///////
-
 	const Glib::ustring sAppName = "com.github.efanomars.bluetoother";
 	const Glib::ustring sWindoTitle = "bluetoother " + Config::getVersionString();
 
@@ -96,30 +64,41 @@ int startGUIClient(int nCmdPipe, int nReturnPipe, int nArgC, char** aArgV)
 	const auto nRet = refApp->run(oWindow);
 	return nRet;
 }
-int startRootServer(int nCmdPipe, int nReturnPipe)
+int startRootServer(int nCmdPipe, int nReturnPipe, bool bPrintOutServerErrors)
 {
-	TootherServer oServer(nCmdPipe, nReturnPipe);
+	TootherServer oServer(nCmdPipe, nReturnPipe, bPrintOutServerErrors);
 	return oServer.run();
 }
 
 int bluetootherMain(int nArgC, char** aArgV)
 {
-	char* aArgVZeroSave = ((nArgC >= 1) ? aArgV[0] : nullptr);
+	bool bPrintOutServerErrors = false;
+	char* p0ArgVZeroSave = ((nArgC >= 1) ? aArgV[0] : nullptr);
 	while (nArgC >= 2) {
 		auto nOldArgC = nArgC;
-		if ((strcmp("--version", aArgV[1]) == 0) || (strcmp("-v", aArgV[1]) == 0)) {
-			printVersion();
-			return EXIT_SUCCESS; //---------------------------------------------
+		if (aArgV[1] != nullptr) {
+			if ((strcmp("--version", aArgV[1]) == 0) || (strcmp("-v", aArgV[1]) == 0)) {
+				printVersion();
+				return EXIT_SUCCESS; //---------------------------------------------
+			}
+			if ((strcmp("--help", aArgV[1]) == 0) || (strcmp("-h", aArgV[1]) == 0)) {
+				printUsage();
+				return EXIT_SUCCESS; //---------------------------------------------
+			}
+			if (strcmp("--print-server-error", aArgV[1]) == 0) {
+				--nArgC;
+				++aArgV;
+				bPrintOutServerErrors = true;
+			}
+			if (nOldArgC == nArgC) {
+				std::cerr << "Unknown argument: " << std::string(aArgV[1]) << '\n';
+				return EXIT_FAILURE; //---------------------------------------------
+			}
+		} else {
+			--nArgC;
+			++aArgV;
 		}
-		if ((strcmp("--help", aArgV[1]) == 0) || (strcmp("-h", aArgV[1]) == 0)) {
-			printUsage();
-			return EXIT_SUCCESS; //---------------------------------------------
-		}
-		if (nOldArgC == nArgC) {
-			std::cerr << "Unknown argument: " << std::string(aArgV[1]) << '\n';
-			return EXIT_FAILURE; //---------------------------------------------
-		}
-		aArgV[0] = aArgVZeroSave;
+		aArgV[0] = p0ArgVZeroSave;
 	}
 
 	int32_t nUID = -1;
@@ -128,14 +107,19 @@ int bluetootherMain(int nArgC, char** aArgV)
 		try {
 			nUID = std::stoi(p0UserName);
 		} catch (std::invalid_argument ) {
-			std::cerr << "Error: PKEXEC_UID invalid value. Please start this program with pkexec" << '\n';
+			std::cerr << "Error: PKEXEC_UID contains invalid uid." << '\n';
 		} catch (std::out_of_range ) {
-			std::cerr << "Error: PKEXEC_UID invalid value. Please start this program with pkexec" << '\n';
+			std::cerr << "Error: PKEXEC_UID contains out of range integer (invalid uid)." << '\n';
 		}
+	} else {
+		std::cerr << "Error: PKEXEC_UID not defined." << '\n';
 	}
 	if (nUID < 0) {
 		std::cerr << "Error: PKEXEC_UID invalid value. Please start this program with pkexec" << '\n';
 		return EXIT_FAILURE; //-------------------------------------------------
+	}
+	if (nUID == 0) {
+		std::cout << "Warning: pkexec was called by root user. This will fail on Wayland." << '\n';
 	}
 	const auto p0Passw = getpwuid(nUID);
 	if (p0Passw == nullptr) {
@@ -149,16 +133,16 @@ int bluetootherMain(int nArgC, char** aArgV)
 		return EXIT_FAILURE; //-------------------------------------------------
 	}
 	pid_t oPid;
-	int aCmdPipe[2];    // 0: read  1:write
-	int aReturnPipe[2]; // 0: read  1:write
+	int aCmdPipe[2];    // 0: read (Server)  1:write (GUI)
+	int aReturnPipe[2]; // 0: read (GUI)     1:write (Server)
 
 	// Create the pipes.
 	if (::pipe(aCmdPipe)) {
-		std::cerr << "Cmd pipe failed." << '\n';
+		std::cerr << "Error: 'Cmd pipe' failed." << '\n';
 		return EXIT_FAILURE; //-------------------------------------------------
 	}
 	if (::pipe(aReturnPipe)) {
-		std::cerr << "Return pipe failed." << '\n';
+		std::cerr << "Error: 'Return pipe' failed." << '\n';
 		return EXIT_FAILURE; //-------------------------------------------------
 	}
 
@@ -166,18 +150,19 @@ int bluetootherMain(int nArgC, char** aArgV)
 	oPid = ::fork();
 	if (oPid == static_cast<pid_t>(0)) {
 		// This is the child process.
-		// Close other end first.
+		// Close other ends first.
 		::close(aCmdPipe[1]);
 		::close(aReturnPipe[0]);
-		//::setuid(nEffectiveUID); // nor really necessary?
-		return startRootServer(aCmdPipe[0], aReturnPipe[1]); //-----------------
+		//::setuid(nEffectiveUID); // not really necessary?
+		auto nRet = startRootServer(aCmdPipe[0], aReturnPipe[1], bPrintOutServerErrors);
+		return nRet; //---------------------------------------------------------
 	} else if (oPid < static_cast<pid_t>(0)) {
 		// The fork failed.
-		std::cerr << "Fork failed." << '\n';
+		std::cerr << "Error: fork failed." << '\n';
 		return EXIT_FAILURE; //-------------------------------------------------
 	} else {
 		// This is the parent process.
-		// Close other end first.
+		// Close other ends first.
 		::close(aCmdPipe[0]);
 		::close(aReturnPipe[1]);
 		//

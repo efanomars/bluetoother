@@ -37,14 +37,16 @@ TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nRet
 , m_p0VBoxMain(nullptr)
 //, m_p0HBoxRefreshAdapters(nullptr)
 , m_p0ButtonRefresh(nullptr)
+//, m_p0VBoxTreeAndCurrentAdapter(nullptr)
 , m_p0TreeViewAdapters(nullptr)
+//, m_p0VBoxCurrentAdapter(nullptr)
 , m_p0LabelCurrentAdapter(nullptr)
 , m_p0LabelCurrentAddress(nullptr)
 , m_p0CheckButtonHardwareEnabled(nullptr)
 , m_p0CheckButtonSoftwareEnabled(nullptr)
 , m_p0CheckButtonAdapterIsUp(nullptr)
 //, m_p0HBoxLocalName(nullptr)
-//, m_p0LabelLocalName(nullptr)
+, m_p0ButtonAdapterSetLocalName(nullptr)
 , m_p0EntryAdapterLocalName(nullptr)
 , m_p0CheckButtonAdapterConnectable(nullptr)
 , m_p0CheckButtonAdapterDetectable(nullptr)
@@ -80,7 +82,7 @@ TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nRet
 			"Version: " + Config::getVersionString() + "\n\n"
 			"Copyright © 2017  Stefano Marsili, <stemars@gmx.ch>.\n"
 			"Further code copyright holders can be found in the sources.\n\n"
-			"Bluetoother is a GUI tool to start/stop the bluetooth adapter\n"
+			"Bluetoother is a tool to start/stop the bluetooth adapter\n"
 			"and the related systemd service. It also allows to set the\n"
 			"local name, the detectability and the connectability of the device.\n\n"
 			"It provides some of the functionality of the command line tools\n"
@@ -106,28 +108,33 @@ TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nRet
 		Gtk::Box* m_p0HBoxRefreshAdapters = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL));
 		m_p0VBoxMain->pack_start(*m_p0HBoxRefreshAdapters, false, false);
 			m_p0HBoxRefreshAdapters->set_spacing(6);
+
 			m_p0ButtonRefresh = Gtk::manage(new Gtk::Button("Refresh"));
 			m_p0HBoxRefreshAdapters->pack_start(*m_p0ButtonRefresh, false, false);
 				m_p0ButtonRefresh->signal_clicked().connect(
 								sigc::mem_fun(*this, &TootherWindow::onButtonRefresh) );
 
-			m_refTreeModelAdapters = Gtk::TreeStore::create(m_oAdaptersColumns);
-			m_p0TreeViewAdapters = Gtk::manage(new Gtk::TreeView(m_refTreeModelAdapters));
-			m_p0HBoxRefreshAdapters->pack_start(*m_p0TreeViewAdapters, true, true);
-				m_p0TreeViewAdapters->append_column("Adapter name", m_oAdaptersColumns.m_oColHciName);
-				m_p0TreeViewAdapters->append_column("id", m_oAdaptersColumns.m_oColHciId);
-				refTreeSelection = m_p0TreeViewAdapters->get_selection();
-				refTreeSelection->signal_changed().connect(
-								sigc::mem_fun(*this, &TootherWindow::onAdapterSelectionChanged));
+			Gtk::Box* m_p0VBoxTreeAndCurrentAdapter = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_VERTICAL));
+			m_p0HBoxRefreshAdapters->pack_start(*m_p0VBoxTreeAndCurrentAdapter, true, true);
+				m_p0VBoxTreeAndCurrentAdapter->set_spacing(6);
 
-		Gtk::Box* m_p0VBoxCurrentAdapter = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_VERTICAL));
-		m_p0VBoxMain->pack_start(*m_p0VBoxCurrentAdapter, false, false);
-			m_p0VBoxCurrentAdapter->set_border_width(5);
+				m_refTreeModelAdapters = Gtk::TreeStore::create(m_oAdaptersColumns);
+				m_p0TreeViewAdapters = Gtk::manage(new Gtk::TreeView(m_refTreeModelAdapters));
+				m_p0VBoxTreeAndCurrentAdapter->pack_start(*m_p0TreeViewAdapters, true, true);
+					m_p0TreeViewAdapters->append_column("Adapter id", m_oAdaptersColumns.m_oColHciId);
+					m_p0TreeViewAdapters->append_column("name", m_oAdaptersColumns.m_oColHciName);
+					refTreeSelection = m_p0TreeViewAdapters->get_selection();
+					refTreeSelection->signal_changed().connect(
+									sigc::mem_fun(*this, &TootherWindow::onAdapterSelectionChanged));
 
-			m_p0LabelCurrentAdapter = Gtk::manage(new Gtk::Label("Bluetooth adapter:"));
-			m_p0VBoxCurrentAdapter->pack_start(*m_p0LabelCurrentAdapter, false, false);
-			m_p0LabelCurrentAddress = Gtk::manage(new Gtk::Label("Address:"));
-			m_p0VBoxCurrentAdapter->pack_start(*m_p0LabelCurrentAddress, false, false);
+				Gtk::Box* m_p0VBoxCurrentAdapter = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_VERTICAL));
+				m_p0VBoxTreeAndCurrentAdapter->pack_start(*m_p0VBoxCurrentAdapter, false, false);
+					m_p0VBoxCurrentAdapter->set_border_width(5);
+
+					m_p0LabelCurrentAdapter = Gtk::manage(new Gtk::Label("Bluetooth adapter:"));
+					m_p0VBoxCurrentAdapter->pack_start(*m_p0LabelCurrentAdapter, false, false);
+					m_p0LabelCurrentAddress = Gtk::manage(new Gtk::Label("Address:"));
+					m_p0VBoxCurrentAdapter->pack_start(*m_p0LabelCurrentAddress, false, false);
 
 		m_p0CheckButtonHardwareEnabled = Gtk::manage(new Gtk::CheckButton("Hardware enabled (RfKill)"));
 		m_p0VBoxMain->pack_start(*m_p0CheckButtonHardwareEnabled, false, false);
@@ -145,13 +152,15 @@ TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nRet
 
 		Gtk::Box* m_p0HBoxLocalName = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL));
 		m_p0VBoxMain->pack_start(*m_p0HBoxLocalName, false, false);
-			Gtk::Label* m_p0LabelLocalName = Gtk::manage(new Gtk::Label("Local name:"));
-			m_p0HBoxLocalName->pack_start(*m_p0LabelLocalName, false, false);
+			m_p0HBoxLocalName->set_spacing(4);
+
+			m_p0ButtonAdapterSetLocalName = Gtk::manage(new Gtk::Button("Set name"));
+			m_p0HBoxLocalName->pack_start(*m_p0ButtonAdapterSetLocalName, false, false);
+				m_p0ButtonAdapterSetLocalName->signal_clicked().connect(
+								sigc::mem_fun(*this, &TootherWindow::onButtonSetName) );
 			m_p0EntryAdapterLocalName = Gtk::manage(new Gtk::Entry());
 			m_p0HBoxLocalName->pack_start(*m_p0EntryAdapterLocalName, true, true);
-				m_p0EntryAdapterLocalName->get_buffer()->set_max_length(s_nMaxLocalNameSize);
-				m_p0EntryAdapterLocalName->signal_focus_out_event().connect(
-								sigc::mem_fun(*this, &TootherWindow::onAdapterLocalNameChangedFocus) );
+				m_p0EntryAdapterLocalName->set_sensitive(false);
 
 		m_p0CheckButtonAdapterConnectable = Gtk::manage(new Gtk::CheckButton("Adapter connectable"));
 		m_p0VBoxMain->pack_start(*m_p0CheckButtonAdapterConnectable, false, false);
@@ -262,7 +271,13 @@ void TootherWindow::setWidgetsValue()
 			oAdapterRow = *(m_refTreeModelAdapters->append()); //oGameRow.children()
 			assert(oAdapter[JsonCommon::s_sKeyModelAdapterName].is_string());
 			const std::string& sLocalName = oAdapter[JsonCommon::s_sKeyModelAdapterName];
-			oAdapterRow[m_oAdaptersColumns.m_oColHciName] = (sLocalName.empty() ? "(unknown)" : sLocalName);
+			std::string sTruncName;
+			if (sLocalName.size() > s_nTruncLocalNameSize) {
+				sTruncName = sLocalName.substr(0, s_nTruncLocalNameSize) + "...";
+			} else {
+				sTruncName = sLocalName;
+			}
+			oAdapterRow[m_oAdaptersColumns.m_oColHciName] = (sTruncName.empty() ? "(unknown)" : sTruncName);
 			oAdapterRow[m_oAdaptersColumns.m_oColHciId] = std::string("hci") + std::to_string(nHciId);
 			oAdapterRow[m_oAdaptersColumns.m_oColHiddenHciId] = nHciId;
 			//
@@ -397,7 +412,7 @@ void TootherWindow::setWidgetsSensitivity()
 	m_p0CheckButtonHardwareEnabled->set_sensitive(false);
 	m_p0CheckButtonSoftwareEnabled->set_sensitive(bAdapterSelected);
 	m_p0CheckButtonAdapterIsUp->set_sensitive(bAdapterEnabled);
-	m_p0EntryAdapterLocalName->set_sensitive(bAdapterEnabled && bIsUp);
+	m_p0ButtonAdapterSetLocalName->set_sensitive(bAdapterEnabled && bIsUp);
 	m_p0CheckButtonAdapterDetectable->set_sensitive(bAdapterEnabled && bIsUp);
 	m_p0CheckButtonAdapterConnectable->set_sensitive(bAdapterEnabled && bIsUp);
 	// adapter independent
@@ -600,38 +615,28 @@ void TootherWindow::onAdapterIsUpToggled()
 	const bool bIsUp = m_p0CheckButtonAdapterIsUp->get_active();
 	execAdapterBoolCmd(JsonCommon::s_sValueCmdSetAdapterIsUp, bIsUp, s_nCmdSetAdapterBoolTimeout);
 }
-bool TootherWindow::onAdapterLocalNameChangedFocus(GdkEventFocus* /*p0Event*/)
+void TootherWindow::onButtonSetName()
 {
 	if (m_bSettingWidgetsValues) {
-		return true; //---------------------------------------------------------
+		return; //--------------------------------------------------------------
 	}
 	assert(!m_bWaitingForReturn);
 	if (m_nSelectedHciId < 0) {
-		return true; //---------------------------------------------------------
+		return; //--------------------------------------------------------------
 	}
-	const std::string sLocalName = m_p0EntryAdapterLocalName->get_text();
-	if (sLocalName.empty()) {
-		assert(!m_oCurState.is_null());
-
-		// go fetch the old name
-		const auto& oAdapters = m_oCurState[JsonCommon::s_sKeyModelAdapters];
-		assert(oAdapters.is_array());
-		assert(oAdapters.size() > 0);
-		assert(m_nSelectedHciId >= 0);
-		const auto ifFind = std::find_if(oAdapters.begin(), oAdapters.end(), [&](const json& oAdapter) {
-			assert(oAdapter.is_object());
-			assert(oAdapter[JsonCommon::s_sKeyModelAdapterHciId].is_number_integer());
-			return (oAdapter[JsonCommon::s_sKeyModelAdapterHciId] == m_nSelectedHciId);
-		});
-		assert(ifFind != oAdapters.end());
-		const auto& oAdapter = *ifFind;
-		assert(oAdapter[JsonCommon::s_sValueCmdSetAdapterName].is_string());
-		const std::string& sOldName = oAdapter[JsonCommon::s_sValueCmdSetAdapterName];
-		m_p0EntryAdapterLocalName->set_text(sOldName);
-		return true; //---------------------------------------------------------
+	std::string sLocalName = m_p0EntryAdapterLocalName->get_text();
+	if (!m_refNameDialog) {
+		m_refNameDialog = Glib::RefPtr<NameDialog>(new NameDialog(*this, s_nMaxLocalNameSize));
 	}
-	execAdapterStringCmd(JsonCommon::s_sValueCmdSetAdapterName, sLocalName, s_nCmdSetAdapterNameTimeout);
-	return true;
+	m_refNameDialog->set_position(Gtk::WIN_POS_CENTER_ON_PARENT);
+//std::cout << "-------> sName=" << sName << '\n';
+	const int nRet = m_refNameDialog->run(sLocalName);
+	m_refNameDialog->hide();
+	if (nRet == NameDialog::s_nRetOk) {
+		sLocalName = m_refNameDialog->getName();
+//std::cout << sLocalName << '\n';
+		execAdapterStringCmd(JsonCommon::s_sValueCmdSetAdapterName, sLocalName, s_nCmdSetAdapterNameTimeout);
+	}
 }
 void TootherWindow::onAdapterConnectableToggled()
 {
