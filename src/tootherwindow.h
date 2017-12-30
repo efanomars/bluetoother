@@ -35,7 +35,7 @@ namespace stmi
 class TootherWindow : public Gtk::Window
 {
 public:
-	TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nReturnPipeFD);
+	TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nReturnPipeFD, bool bReadOnly);
 	virtual ~TootherWindow();
 
 private:
@@ -72,7 +72,10 @@ private:
 
 	void quitOnFatalError(const std::string& sErr);
 
+	void onWindowRealize();
+	void showReadOnlyWarning();
 private:
+	bool m_bReadOnly;
 	int m_nCmdPipeFD;
 
 	Glib::RefPtr<PipeInputSource> m_refPipeInputSource;

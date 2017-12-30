@@ -190,31 +190,31 @@ void TootherServer::cmdGetState(int32_t nStamp)
 void TootherServer::cmdSetAdapterSoftwareEnabled(int32_t nStamp, int32_t nAdapter, bool bEnabled)
 {
 //std::cout << "TootherServer::cmdSetAdapterSoftwareEnabled bEnabled=" << bEnabled << '\n';
-	cmdSetAdapterProperty(nStamp, nAdapter, [&](HciAdapter* p0Adapter) {
+	cmdSetAdapterProperty(nStamp, nAdapter, s_nCmdSetSoftwareEnabled, [&](HciAdapter* p0Adapter) {
 		return p0Adapter->setSoftwareEnabled(bEnabled);
 	});
 }
 void TootherServer::cmdSetAdapterIsUp(int32_t nStamp, int32_t nAdapter, bool bIsUp)
 {
-	cmdSetAdapterProperty(nStamp, nAdapter, [&](HciAdapter* p0Adapter) {
+	cmdSetAdapterProperty(nStamp, nAdapter, 0, [&](HciAdapter* p0Adapter) {
 		return p0Adapter->setAdapterIsUp(bIsUp);
 	});
 }
 void TootherServer::cmdSetAdapterName(int32_t nStamp, int32_t nAdapter, const std::string& sName)
 {
-	cmdSetAdapterProperty(nStamp, nAdapter, [&](HciAdapter* p0Adapter) {
+	cmdSetAdapterProperty(nStamp, nAdapter, 0, [&](HciAdapter* p0Adapter) {
 		return p0Adapter->setLocalName(sName);
 	});
 }
 void TootherServer::cmdSetAdapterConnectable(int32_t nStamp, int32_t nAdapter, bool bConnectable)
 {
-	cmdSetAdapterProperty(nStamp, nAdapter, [&](HciAdapter* p0Adapter) {
+	cmdSetAdapterProperty(nStamp, nAdapter, 0, [&](HciAdapter* p0Adapter) {
 		return p0Adapter->setConnectable(bConnectable);
 	});
 }
 void TootherServer::cmdSetAdapterDetectable(int32_t nStamp, int32_t nAdapter, bool bDetectable)
 {
-	cmdSetAdapterProperty(nStamp, nAdapter, [&](HciAdapter* p0Adapter) {
+	cmdSetAdapterProperty(nStamp, nAdapter, 0, [&](HciAdapter* p0Adapter) {
 		return p0Adapter->setDetectable(bDetectable);
 	});
 }

@@ -64,7 +64,7 @@ private:
 //	void cmdDisconnect();
 
 	template<typename TCapa>
-	void cmdSetAdapterProperty(int32_t nStamp, int32_t nAdapter, TCapa oCapa)
+	void cmdSetAdapterProperty(int32_t nStamp, int32_t nAdapter, int32_t nMillisec, TCapa oCapa)
 	{
 		auto p0Adapter = m_oHciSocket.getAdapter(nAdapter);
 		if (p0Adapter == nullptr) {
@@ -79,7 +79,7 @@ private:
 			sendReturn(JsonCommon::buildReturnError(nStamp, p0Adapter->getLastError()).dump(4));
 			return; //--------------------------------------------------------------
 		}
-		startTimeout(nStamp, 0, false);
+		startTimeout(nStamp, nMillisec, false);
 	}
 
 	json getState();
@@ -96,9 +96,8 @@ private:
 
 	Glib::RefPtr<PipeInputSource> m_refPipeInputSource;
 
-// 	// set to true when shutting down to avoid printing errors
-// 	bool m_bDisconnected;
 
+	static constexpr int32_t s_nCmdSetSoftwareEnabled = 300; // millisec
 	static constexpr int32_t s_nCmdSetServiceRunningTimeout = 2500; // millisec
 	static constexpr int32_t s_nCmdSetServiceEnabledTimeout = 1500; // millisec
 private:

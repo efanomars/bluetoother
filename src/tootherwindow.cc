@@ -29,8 +29,9 @@
 namespace stmi
 {
 
-TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nReturnPipeFD)
+TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nReturnPipeFD, bool bReadOnly)
 : Gtk::Window()
+, m_bReadOnly(bReadOnly)
 , m_nCmdPipeFD(nCmdPipeFD)
 //, m_p0NotebookChoices(nullptr)
 //, m_p0TabLabelMain(nullptr)
@@ -69,7 +70,7 @@ TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nRet
 	m_refPipeInputSource->connect(sigc::mem_fun(*this, &TootherWindow::doReceiveString));
 	m_refPipeInputSource->attach();
 	//
-	set_title(sTitle);
+	set_title(sTitle + (m_bReadOnly ? " (restricted)" : ""));
 	set_default_size(s_nInitialWindowSizeW, s_nInitialWindowSizeH);
 	set_resizable(true);
 
@@ -207,15 +208,36 @@ TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nRet
 		m_p0ScrolledInfo->add(*m_p0LabelInfoText);
 			m_p0LabelInfoText->set_line_wrap_mode(Pango::WRAP_WORD_CHAR);
 
+	if (m_bReadOnly) {
+		printStringToLog("Restricted mode!!!");
+		m_p0VBoxMain->set_sensitive(false);
+		signal_realize().connect(sigc::mem_fun(*this, &TootherWindow::onWindowRealize));
+	}
 
 	show_all_children();
 
 	m_refWatchCursor = Gdk::Cursor::create(Gdk::WATCH);
 
-	onButtonRefresh();
+	if (!m_bReadOnly) {
+		onButtonRefresh();
+	}
 }
 TootherWindow::~TootherWindow()
 {
+}
+void TootherWindow::onWindowRealize()
+{
+	Glib::signal_timeout().connect_once(sigc::mem_fun(*this, &TootherWindow::showReadOnlyWarning), 0);
+}
+void TootherWindow::showReadOnlyWarning()
+{
+	assert(m_bReadOnly);
+	Gtk::MessageDialog oDlg(*this, "The program was started by non root user.\n"
+							"Most of the functionality won't work.\n"
+							"Please use 'pkexec bluetoother'.", false
+							, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, false);
+	oDlg.run();
+	onButtonRefresh();
 }
 void TootherWindow::setWidgetsValue()
 {
@@ -416,10 +438,8 @@ void TootherWindow::setWidgetsSensitivity()
 	m_p0CheckButtonAdapterDetectable->set_sensitive(bAdapterEnabled && bIsUp);
 	m_p0CheckButtonAdapterConnectable->set_sensitive(bAdapterEnabled && bIsUp);
 	// adapter independent
-	m_p0CheckButtonServiceRunning->set_sensitive(true);
-	m_p0CheckButtonServiceEnabled->set_sensitive(true);
-
-// 	m_p0ButtonTurnAllOn->set_sensitive(true);
+	m_p0CheckButtonServiceRunning->set_sensitive(!m_bReadOnly);
+	m_p0CheckButtonServiceEnabled->set_sensitive(!m_bReadOnly);
 }
 void TootherWindow::startRefreshing(int32_t nMillisec)
 {
@@ -509,6 +529,7 @@ void TootherWindow::doReceiveString(bool bError, const std::string& sStr)
 }
 void TootherWindow::onTimeout(int32_t nStamp, int32_t nMillisec)
 {
+//std::cout << "TootherWindow::onTimeout() nMillisec = " << nMillisec << "" << '\n';
 	if (nStamp != m_nStamp) {
 		// mega old timeout
 		return; //----------------------------------------------------------
@@ -528,10 +549,9 @@ void TootherWindow::onTimeout(int32_t nStamp, int32_t nMillisec)
 	if (bWaitingForState) {
 		// Refresh error, set state to null!
 		m_oCurState = json{};
-		setWidgetsValue();
-		setWidgetsSensitivity();
 	}
-
+	setWidgetsValue();
+	setWidgetsSensitivity();
 }
 void TootherWindow::onNotebookSwitchPage(Gtk::Widget*, guint nPageNum)
 {

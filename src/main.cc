@@ -47,7 +47,7 @@ void printUsage()
 	std::cout << "  -v --version           Prints version." << '\n';
 }
 
-int startGUIClient(int nCmdPipe, int nReturnPipe, int nArgC, char** aArgV)
+int startGUIClient(bool bReadOnly, int nCmdPipe, int nReturnPipe, int nArgC, char** aArgV)
 {
 	const Glib::ustring sAppName = "com.github.efanomars.bluetoother";
 	const Glib::ustring sWindoTitle = "bluetoother " + Config::getVersionString();
@@ -60,7 +60,7 @@ int startGUIClient(int nCmdPipe, int nReturnPipe, int nArgC, char** aArgV)
 		std::cout << "Error: " << oErr.what() << '\n';
 		return EXIT_FAILURE; //-------------------------------------------------
 	}
-	TootherWindow oWindow(sWindoTitle, nCmdPipe, nReturnPipe);
+	TootherWindow oWindow(sWindoTitle, nCmdPipe, nReturnPipe, bReadOnly);
 	const auto nRet = refApp->run(oWindow);
 	return nRet;
 }
@@ -101,40 +101,48 @@ int bluetootherMain(int nArgC, char** aArgV)
 		aArgV[0] = p0ArgVZeroSave;
 	}
 
-	int32_t nUID = -1;
-	char* p0UserName = getenv("PKEXEC_UID");
-	if (p0UserName != nullptr) {
-		try {
-			nUID = std::stoi(p0UserName);
-		} catch (std::invalid_argument ) {
-			std::cerr << "Error: PKEXEC_UID contains invalid uid." << '\n';
-		} catch (std::out_of_range ) {
-			std::cerr << "Error: PKEXEC_UID contains out of range integer (invalid uid)." << '\n';
-		}
-	} else {
-		std::cerr << "Error: PKEXEC_UID not defined." << '\n';
-	}
-	if (nUID < 0) {
-		std::cerr << "Error: PKEXEC_UID invalid value. Please start this program with pkexec" << '\n';
-		return EXIT_FAILURE; //-------------------------------------------------
-	}
-	if (nUID == 0) {
-		std::cout << "Warning: pkexec was called by root user. This will fail on Wayland." << '\n';
-	}
-	const auto p0Passw = getpwuid(nUID);
-	if (p0Passw == nullptr) {
-		std::cerr << "Error: getpwuid couldn't find user '" << nUID << "'" << '\n';
-		return EXIT_FAILURE; //-------------------------------------------------
-	}
-	const auto nGID = p0Passw->pw_gid;
 	const auto nEffectiveUID = ::geteuid();
-	if (nEffectiveUID != 0) {
-		std::cerr << "Error: effective user must be root (user id 0)." << '\n';
-		return EXIT_FAILURE; //-------------------------------------------------
+
+	bool bReadOnly = false;
+	int32_t nUID = -1;
+	int32_t nGID = -1;
+	if (nEffectiveUID == 0) {
+		// run as root
+		// look if pkexec was used
+		char* p0UserId = getenv("PKEXEC_UID");
+		if (p0UserId != nullptr) {
+			try {
+				nUID = std::stoi(p0UserId);
+			} catch (std::invalid_argument ) {
+				std::cerr << "Error: PKEXEC_UID contains invalid uid." << '\n';
+			} catch (std::out_of_range ) {
+				std::cerr << "Error: PKEXEC_UID contains out of range integer (invalid uid)." << '\n';
+			}
+		} else {
+			std::cerr << "Error: PKEXEC_UID not defined." << '\n';
+		}
+		if (nUID < 0) {
+			std::cerr << "Error: PKEXEC_UID invalid value. You should start this program with pkexec." << '\n';
+			nUID = 0;
+			//return EXIT_FAILURE; //-------------------------------------------------
+		} else if (nUID == 0) {
+			std::cout << "Warning: pkexec was called by root user. Will fail on Wayland." << '\n';
+		}
+		const auto p0Passw = getpwuid(nUID);
+		if (p0Passw == nullptr) {
+			std::cerr << "Error: getpwuid couldn't find user '" << nUID << "'" << '\n';
+			return EXIT_FAILURE; //-------------------------------------------------
+		}
+		nGID = p0Passw->pw_gid;
+	} else {
+		// unprivileged user: read-only mode
+		nUID = nEffectiveUID;
+		nGID = ::getegid();
+		bReadOnly = true;
 	}
 	pid_t oPid;
-	int aCmdPipe[2];    // 0: read (Server)  1:write (GUI)
-	int aReturnPipe[2]; // 0: read (GUI)     1:write (Server)
+	int aCmdPipe[2];    // 0: read (Server)  1: write (GUI)
+	int aReturnPipe[2]; // 0: read (GUI)     1: write (Server)
 
 	// Create the pipes.
 	if (::pipe(aCmdPipe)) {
@@ -177,7 +185,7 @@ int bluetootherMain(int nArgC, char** aArgV)
 			return EXIT_FAILURE; //---------------------------------------------
 		}
 		//
-		return startGUIClient(aCmdPipe[1], aReturnPipe[0], nArgC, aArgV); //----
+		return startGUIClient(bReadOnly, aCmdPipe[1], aReturnPipe[0], nArgC, aArgV); //----
 	}
 }
 
