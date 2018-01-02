@@ -26,7 +26,7 @@ from datetime import date
 
 def main():
 
-	aExclPatterns = ["build*", "configure", "nbproject*", ".project", ".cproject", ".settings"]
+	aExclPatterns = ["build*", "configure", "nbproject*", ".project", ".cproject", ".settings", "core"]
 
 	sExcludes = ""
 	for sExclPattern in aExclPatterns:
@@ -53,6 +53,7 @@ def main():
 							" --exclude=.git"
 							" --exclude=stuff"
 							" --exclude=.metadata"
+							" --exclude=core"
 							" {}").format(sToday, sExcludes, sSourceDir)
 	print(sCmd)
 

@@ -36,7 +36,7 @@ To change the default installation directory add definition
 
 Alternatively you can just execute the script
 
-  $ ./scripts/install_bluetoother.py  -b Release  --destdir /usr
+  $ ./scripts/install_bluetoother.py  -b Release  --destdir /usr/local
 
 setting the parameter(s) to your preferred value (like above).
 
@@ -44,3 +44,27 @@ setting the parameter(s) to your preferred value (like above).
 
 for a description of all available options.
 
+
+Run
+---
+
+Through the menu with the installed application launcher.
+
+From the terminal for both X11 and Wayland
+
+  $ pkexec bluetoother
+
+in restricted mode (you can only rfkill software enable/disable)
+
+  $ bluetoother
+
+For X11 you can also run it with
+
+  $ gksu bluetoother
+
+or
+
+  $ sudo bluetoother
+
+
+  

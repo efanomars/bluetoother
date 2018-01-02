@@ -540,7 +540,7 @@ void TootherWindow::onTimeout(int32_t nStamp, int32_t nMillisec)
 	}
 	cursorToNormal();
 	//
-	printStringToLog("Last command timed out (" + std::to_string(nMillisec) + ")!");
+	printStringToLog("Last command timed out (" + std::to_string(nMillisec) + " millisec)!");
 	//TODO message box
 	//
 	m_bWaitingForReturn = false;

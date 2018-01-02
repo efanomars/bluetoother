@@ -31,7 +31,7 @@
 namespace stmi
 {
 
-/* For polling pipe read and write events */
+/* For polling pipe read events */
 class PipeInputSource : public Glib::Source
 {
 public:
@@ -56,7 +56,7 @@ private:
 	//
 	std::string m_sReceiveBuffer;
 
-	static constexpr int32_t s_nMaxJasonStringSize = 64000;
+	static constexpr int32_t s_nMaxJsonStringSize = 64000;
 private:
 	PipeInputSource() = delete;
 	PipeInputSource(const PipeInputSource& oSource) = delete;

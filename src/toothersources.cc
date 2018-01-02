@@ -42,7 +42,7 @@ PipeInputSource::PipeInputSource(int32_t nPipeFD)
 }
 PipeInputSource::~PipeInputSource()
 {
-//std::cout << "PipeInputSource::~PipeInputSource()" << std::endl;
+//std::cout << "PipeInputSource::~PipeInputSource()" << '\n';
 	if (m_nPipeFD >= 0) {
 		::close(m_nPipeFD);
 	}
@@ -73,24 +73,24 @@ bool PipeInputSource::check()
 }
 bool PipeInputSource::dispatch(sigc::slot_base* p0Slot)
 {
-	bool bContinue = true;
+	const bool bContinue = true;
 
 	if (p0Slot == nullptr) {
 		// Shouldn't happen
 		return bContinue;
 	}
-//std::cout << "PipeInputSource::dispatch" << std::endl;
+//std::cout << "PipeInputSource::dispatch" << '\n';
 
 	const auto nIoEvents = m_oReadPollFD.get_revents();
 	const bool bClientHangedUp = ((nIoEvents & Glib::IO_HUP) != 0);
-	const bool bPipeError = ((nIoEvents & (Glib::IO_HUP | Glib::IO_NVAL)) != 0);
+	const bool bPipeError = ((nIoEvents & (Glib::IO_ERR | Glib::IO_NVAL)) != 0);
 	if (bClientHangedUp || bPipeError) {
 		// some sort of problem ... close pipe
 		(*static_cast<sigc::slot<void, bool, const std::string&>*>(p0Slot))(true, (bPipeError ? "Pipe error" : "Client hanged up"));
 		return !bContinue; // --------------------------------------------------
 	}
 	if ((nIoEvents & G_IO_IN) != 0) {
-		char aStreamBuf[s_nMaxJasonStringSize];
+		char aStreamBuf[s_nMaxJsonStringSize];
 		const int32_t nBufLen = sizeof aStreamBuf;
 		const int32_t nReadLen = ::read(m_oReadPollFD.get_fd(), aStreamBuf, nBufLen);
 		if (nReadLen == 0) {
