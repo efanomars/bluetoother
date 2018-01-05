@@ -43,11 +43,12 @@ void printUsage()
 	std::cout << "Usage: bluetoother" << '\n';
 	std::cout << "Setup bluetooth adpter connectivity." << '\n';
 	std::cout << "Option:" << '\n';
-	std::cout << "  -h --help              Prints this message." << '\n';
-	std::cout << "  -v --version           Prints version." << '\n';
+	std::cout << "  -h --help       Prints this message." << '\n';
+	std::cout << "  -v --version    Prints version." << '\n';
+	std::cout << "  --no-warn-dlg   No warning dialog in restricted mode." << '\n';
 }
 
-int startGUIClient(bool bReadOnly, int nCmdPipe, int nReturnPipe, int nArgC, char** aArgV)
+int startGUIClient(bool bReadOnly, bool bNoRestrictedWarning, int nCmdPipe, int nReturnPipe)
 {
 	const Glib::ustring sAppName = "com.github.efanomars.bluetoother";
 	const Glib::ustring sWindoTitle = "bluetoother " + Config::getVersionString();
@@ -55,12 +56,12 @@ int startGUIClient(bool bReadOnly, int nCmdPipe, int nReturnPipe, int nArgC, cha
 	Glib::RefPtr<Gtk::Application> refApp;
 	try {
 		//
-		refApp = Gtk::Application::create(nArgC, aArgV, sAppName);
+		refApp = Gtk::Application::create(sAppName);
 	} catch (const std::runtime_error& oErr) {
 		std::cout << "Error: " << oErr.what() << '\n';
 		return EXIT_FAILURE; //-------------------------------------------------
 	}
-	TootherWindow oWindow(sWindoTitle, nCmdPipe, nReturnPipe, bReadOnly);
+	TootherWindow oWindow(sWindoTitle, nCmdPipe, nReturnPipe, bReadOnly, bNoRestrictedWarning);
 	const auto nRet = refApp->run(oWindow);
 	return nRet;
 }
@@ -73,7 +74,7 @@ int startRootServer(int nCmdPipe, int nReturnPipe, bool bPrintOutServerErrors)
 int bluetootherMain(int nArgC, char** aArgV)
 {
 	bool bPrintOutServerErrors = false;
-	char* p0ArgVZeroSave = ((nArgC >= 1) ? aArgV[0] : nullptr);
+	bool bNoRestrictedWarning = false;
 	while (nArgC >= 2) {
 		auto nOldArgC = nArgC;
 		if (aArgV[1] != nullptr) {
@@ -85,10 +86,15 @@ int bluetootherMain(int nArgC, char** aArgV)
 				printUsage();
 				return EXIT_SUCCESS; //---------------------------------------------
 			}
-			if (strcmp("--print-server-error", aArgV[1]) == 0) {
+			if (strcmp("--print-server-errors", aArgV[1]) == 0) {
 				--nArgC;
 				++aArgV;
 				bPrintOutServerErrors = true;
+			}
+			if (strcmp("--no-warn-dlg", aArgV[1]) == 0) {
+				--nArgC;
+				++aArgV;
+				bNoRestrictedWarning = true;
 			}
 			if (nOldArgC == nArgC) {
 				std::cerr << "Unknown argument: " << std::string(aArgV[1]) << '\n';
@@ -98,7 +104,6 @@ int bluetootherMain(int nArgC, char** aArgV)
 			--nArgC;
 			++aArgV;
 		}
-		aArgV[0] = p0ArgVZeroSave;
 	}
 
 	const auto nEffectiveUID = ::geteuid();
@@ -114,21 +119,21 @@ int bluetootherMain(int nArgC, char** aArgV)
 			try {
 				nUID = std::stoi(p0UserId);
 			} catch (std::invalid_argument ) {
-				std::cerr << "Error: PKEXEC_UID contains invalid uid." << '\n';
+				std::cerr << "Warning: PKEXEC_UID contains invalid uid." << '\n';
 			} catch (std::out_of_range ) {
-				std::cerr << "Error: PKEXEC_UID contains out of range integer (invalid uid)." << '\n';
+				std::cerr << "Warning: PKEXEC_UID contains out of range integer (invalid uid)." << '\n';
 			}
 		} else {
-			std::cerr << "Error: PKEXEC_UID not defined." << '\n';
+			std::cerr << "Warning: PKEXEC_UID not defined." << '\n';
 		}
 		if (nUID < 0) {
-			std::cerr << "Error: PKEXEC_UID invalid value. You should start this program with pkexec." << '\n';
+			std::cerr << "Warning: PKEXEC_UID invalid value. You should start this program with pkexec." << '\n';
 			nUID = 0;
 			//return EXIT_FAILURE; //-------------------------------------------------
 		} else if (nUID == 0) {
 			std::cout << "Warning: pkexec was called by root user. Will fail on Wayland." << '\n';
 		}
-		const auto p0Passw = getpwuid(nUID);
+		const auto p0Passw = ::getpwuid(nUID);
 		if (p0Passw == nullptr) {
 			std::cerr << "Error: getpwuid couldn't find user '" << nUID << "'" << '\n';
 			return EXIT_FAILURE; //-------------------------------------------------
@@ -185,7 +190,7 @@ int bluetootherMain(int nArgC, char** aArgV)
 			return EXIT_FAILURE; //---------------------------------------------
 		}
 		//
-		return startGUIClient(bReadOnly, aCmdPipe[1], aReturnPipe[0], nArgC, aArgV); //----
+		return startGUIClient(bReadOnly, bNoRestrictedWarning, aCmdPipe[1], aReturnPipe[0]); //----
 	}
 }
 

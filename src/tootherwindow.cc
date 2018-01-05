@@ -29,9 +29,11 @@
 namespace stmi
 {
 
-TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nReturnPipeFD, bool bReadOnly)
+TootherWindow::TootherWindow(const std::string& sTitle, int nCmdPipeFD, int nReturnPipeFD
+							, bool bReadOnly, bool bNoRestrictedWarning)
 : Gtk::Window()
 , m_bReadOnly(bReadOnly)
+, m_bNoRestrictedWarning(bNoRestrictedWarning)
 , m_nCmdPipeFD(nCmdPipeFD)
 //, m_p0NotebookChoices(nullptr)
 //, m_p0TabLabelMain(nullptr)
@@ -232,11 +234,13 @@ void TootherWindow::onWindowRealize()
 void TootherWindow::showReadOnlyWarning()
 {
 	assert(m_bReadOnly);
-	Gtk::MessageDialog oDlg(*this, "The program was started by non root user.\n"
-							"Most of the functionality won't work.\n"
-							"Please use 'pkexec bluetoother'.", false
-							, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, false);
-	oDlg.run();
+	if (! m_bNoRestrictedWarning) {
+		Gtk::MessageDialog oDlg(*this, "The program was started by non root user.\n"
+								"Most of the functionality won't work.\n"
+								"Please use 'pkexec bluetoother'.", false
+								, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, false);
+		oDlg.run();
+	}
 	onButtonRefresh();
 }
 void TootherWindow::setWidgetsValue()
@@ -650,7 +654,7 @@ void TootherWindow::onButtonSetName()
 	}
 	m_refNameDialog->set_position(Gtk::WIN_POS_CENTER_ON_PARENT);
 //std::cout << "-------> sName=" << sName << '\n';
-	const int nRet = m_refNameDialog->run(sLocalName);
+	const int nRet = m_refNameDialog->run(sLocalName, m_nSelectedHciId);
 	m_refNameDialog->hide();
 	if (nRet == NameDialog::s_nRetOk) {
 		sLocalName = m_refNameDialog->getName();
