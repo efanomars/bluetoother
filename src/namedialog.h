@@ -35,7 +35,7 @@ public:
 	virtual ~NameDialog();
 
 	// Call this instead of run()
-	int run(const std::string& sName);
+	int run(const std::string& sName, int32_t nSelectedHciId);
 
 	// Call this after run(...) has returned s_nRetOk
 	// The returned name is always valid
@@ -56,8 +56,8 @@ private:
 	std::string m_sOldName; 
 	std::string m_sName;
 
-	static const std::string s_sLabelStringNormal;
-	static const std::string s_sLabelStringError;
+	std::string m_sLabelStringNormal;
+	std::string m_sLabelStringError;
 
 	static constexpr int32_t s_nInitialWindowSizeW = 200;
 	static constexpr int32_t s_nInitialWindowSizeH = 100;
