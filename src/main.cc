@@ -114,7 +114,7 @@ int bluetootherMain(int nArgC, char** aArgV)
 	if (nEffectiveUID == 0) {
 		// run as root
 		// look if pkexec was used
-		char* p0UserId = getenv("PKEXEC_UID");
+		char* p0UserId = ::getenv("PKEXEC_UID");
 		if (p0UserId != nullptr) {
 			try {
 				nUID = std::stoi(p0UserId);
