@@ -25,7 +25,7 @@ import subprocess
 
 def callTidy(sSubDir):
 	#
-	os.chdir(sSubDir)
+	#os.chdir(sSubDir)
 
 	print("clang-tidy started for project: " + sSubDir)
 
@@ -53,12 +53,6 @@ def main():
 	os.chdir("..")
 	#
 	callTidy("bluetoother")
-	callTidy("libstmm-input-gtk-bt")
-	callTidy("stmm-input-bttest")
-
-	os.chdir("libstmm-input-gtk-bt/examples")
-	callTidy("keys-srv")
-	os.chdir("../..")
 
 if __name__ == "__main__":
 	main()

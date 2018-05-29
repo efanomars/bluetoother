@@ -76,7 +76,7 @@ if (STMM_INSTALL_LAUNCHER)
             NO_CMAKE_SYSTEM_PATH
             )
     if ("${STMMIFINDPKEXEC}" STREQUAL "STMMIFINDPKEXEC-NOTFOUND")
-         message(FATAL_ERROR "Couldn't find the pkexec command. Install the gksu package first!")
+         message(FATAL_ERROR "Couldn't find the pkexec command. Install the 'policykit-1' package first!")
     endif()
 endif()
 

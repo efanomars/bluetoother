@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-#  Copyright © 2017  Stefano Marsili, <stemars@gmx.ch>
+#  Copyright © 2017-2018  Stefano Marsili, <stemars@gmx.ch>
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
 # - compiles and installs the project contained in this source package
 #   for both Debug and Release configurations
 # - makes sure no line in the code starts with std::cout
-# - optionally calls clang-llvm sanitizer
 # - optionally calls clang-tidy
 
 import sys
@@ -28,17 +27,7 @@ import os
 import subprocess
 
 
-def testAll(sBuildType, sDestDir, sSudo, bBuildStatic, bSanitize):
-	sStatic = ""
-	if bBuildStatic:
-		sStatic = "-s On"
-	else:
-		sStatic = "-s Off"
-
-	if bSanitize:
-		sSanitize = "--sanitize"
-	else:
-		sSanitize = ""
+def testAll(sBuildType, sDestDir, sSudo):
 
 	subprocess.check_call("./scripts/uninstall_bluetoother.py -r -y --destdir {}  {}".format(sDestDir, sSudo).split())
 
@@ -55,7 +44,7 @@ def checkTidy():
 def main():
 
 	import argparse
-	oParser = argparse.ArgumentParser(description="Uninstall, compile, document, reinstall and test all projects")
+	oParser = argparse.ArgumentParser(description="Uninstall, compile, reinstall the bluetoother project")
 	oParser.add_argument("-y", "--no-prompt", help="no prompt comfirmation", action="store_true"\
 						, default=False, dest="bNoPrompt")
 	oParser.add_argument("--destdir", help="install dir (default=/usr/local)", metavar='DESTDIR'\
@@ -64,10 +53,6 @@ def main():
 						, default=False, dest="bDontSudo")
 	oParser.add_argument("-b", "--buildtype", help="build type (default=Both)", choices=['Debug', 'Release', 'Both']\
 						, default="Both", dest="sBuildType")
-	oParser.add_argument("-l", "--link", help="build static library or shared", choices=['Static', 'Shared', 'Both']\
-						, default="Both", dest="sLinkType")
-	oParser.add_argument("--sanitize", help="execute tests with llvm address sanitize checks (Debug+Static only)", action="store_true"\
-						, default=False, dest="bSanitize")
 	oParser.add_argument("--tidy", help="apply clang-tidy to source code", action="store_true"\
 						, default=False, dest="bTidy")
 	oArgs = oParser.parse_args()
@@ -92,45 +77,18 @@ def main():
 	else:
 		sSudo = ""
 
-	bTidyDone = False  # tidy should be applied only once for the same build type
-
-	if (oArgs.sLinkType == "Both") or (oArgs.sLinkType == "Static"):
-		bBuildStatic = True
-		if oArgs.sBuildType == "Both":
-			if oArgs.bSanitize:
-				testAll("Debug", sDestDir, sSudo, bBuildStatic, True)
-			#
-			testAll("Debug", sDestDir, sSudo, bBuildStatic, False)
-			if oArgs.bTidy:
-				checkTidy()
-			#
-			testAll("Release", sDestDir, sSudo, bBuildStatic, False)
-			if oArgs.bTidy:
-				checkTidy()
-				bTidyDone = True
-		else:
-			if oArgs.bSanitize and (oArgs.sBuildType == "Debug"):
-				testAll("Debug", sDestDir, sSudo, bBuildStatic, True)
-			#
-			testAll(oArgs.sBuildType, sDestDir, sSudo, bBuildStatic, False)
-			if oArgs.bTidy:
-				checkTidy()
-				bTidyDone = True
-
-	if (oArgs.sLinkType == "Both") or (oArgs.sLinkType == "Shared"):
-		bBuildStatic = False
-		if oArgs.sBuildType == "Both":
-			testAll("Debug", sDestDir, sSudo, bBuildStatic, False)
-			if oArgs.bTidy and not bTidyDone:
-				checkTidy()
-			#
-			testAll("Release", sDestDir, sSudo, bBuildStatic, False)
-			if oArgs.bTidy and not bTidyDone:
-				checkTidy()
-		else:
-			testAll(oArgs.sBuildType, sDestDir, sSudo, bBuildStatic, False)
-			if oArgs.bTidy and not bTidyDone:
-				checkTidy()
+	if oArgs.sBuildType == "Both":
+		testAll("Debug", sDestDir, sSudo)
+		if oArgs.bTidy:
+			checkTidy()
+		#
+		testAll("Release", sDestDir, sSudo)
+		if oArgs.bTidy:
+			checkTidy()
+	else:
+		testAll(oArgs.sBuildType, sDestDir, sSudo)
+		if oArgs.bTidy:
+			checkTidy()
 
 	print("------------------------------------")
 	print("compileall.py finished successfully!")
