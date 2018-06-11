@@ -90,8 +90,7 @@ int bluetootherMain(int nArgC, char** aArgV)
 				--nArgC;
 				++aArgV;
 				bPrintOutServerErrors = true;
-			}
-			if (strcmp("--no-warn-dlg", aArgV[1]) == 0) {
+			} else if (strcmp("--no-warn-dlg", aArgV[1]) == 0) {
 				--nArgC;
 				++aArgV;
 				bNoRestrictedWarning = true;
