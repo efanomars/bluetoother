@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Bluetoother
+Icon=bluetoother
+Type=Application
+Terminal=false
+Categories=Utility;
+Keywords=bluetooth;settigs;
+Comment=Bluetooth adapter connectivity
+Exec=pkexec bluetoother
+GenericName=Bluetooth management
+Name[en_US]=Bluetoother

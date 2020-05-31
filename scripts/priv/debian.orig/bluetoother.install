@@ -1,0 +1,7 @@
+usr/bin/bluetoother
+usr/share/icons/hicolor/24x24/apps/bluetoother.png
+usr/share/icons/hicolor/32x32/apps/bluetoother.png
+usr/share/icons/hicolor/48x48/apps/bluetoother.png
+usr/share/icons/hicolor/scalable/apps/bluetoother.svg
+usr/share/applications/com.efanomars.bluetoother.desktop
+usr/share/polkit-1/actions/com.efanomars.bluetoother.policy

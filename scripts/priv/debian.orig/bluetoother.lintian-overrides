@@ -1,0 +1,3 @@
+
+# !!! TODO create a _pkexec executable? !!!
+bluetoother: desktop-command-not-in-package usr/share/applications/com.efanomars.bluetoother.desktop pkexec
