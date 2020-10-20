@@ -54,7 +54,7 @@ private:
 
 	Glib::RefPtr<Gtk::EntryBuffer> m_refEntryBuffer;
 	////////////
-	std::string m_sOldName; 
+	std::string m_sOldName;
 	std::string m_sName;
 
 	std::string m_sLabelStringNormal;

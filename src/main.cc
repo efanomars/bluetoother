@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2019  Stefano Marsili, <stemars@gmx.ch>
+ * Copyright © 2017-2020  Stefano Marsili, <stemars@gmx.ch>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 
 namespace stmi
 {
@@ -48,9 +49,10 @@ void printUsage() noexcept
 	std::cout << "Usage: bluetoother" << '\n';
 	std::cout << "Setup bluetooth adpter connectivity." << '\n';
 	std::cout << "Option:" << '\n';
-	std::cout << "  -h --help       Prints this message." << '\n';
-	std::cout << "  -v --version    Prints version." << '\n';
-	std::cout << "  --no-warn-dlg   No warning dialog in restricted mode." << '\n';
+	std::cout << "  -h --help              Prints this message." << '\n';
+	std::cout << "  -v --version           Prints version." << '\n';
+	std::cout << "  --print-server-errors  Prints errors." << '\n';
+	std::cout << "  --no-warn-dlg          No warning dialog in restricted mode." << '\n';
 }
 
 int startGUIClient(bool bReadOnly, bool bNoRestrictedWarning, int nCmdPipe, int nReturnPipe) noexcept
@@ -67,8 +69,7 @@ int startGUIClient(bool bReadOnly, bool bNoRestrictedWarning, int nCmdPipe, int 
 		return EXIT_FAILURE; //-------------------------------------------------
 	}
 	TootherWindow oWindow(sWindoTitle, nCmdPipe, nReturnPipe, bReadOnly, bNoRestrictedWarning);
-	const auto nRet = refApp->run(oWindow);
-	return nRet;
+	return refApp->run(oWindow);
 }
 int startRootServer(int nCmdPipe, int nReturnPipe, bool bPrintOutServerErrors) noexcept
 {
@@ -149,7 +150,6 @@ int bluetootherMain(int nArgC, char** aArgV) noexcept
 		nGID = ::getegid();
 		bReadOnly = true;
 	}
-	pid_t oPid;
 	int aCmdPipe[2];    // 0: read (Server)  1: write (GUI)
 	int aReturnPipe[2]; // 0: read (GUI)     1: write (Server)
 
@@ -164,7 +164,7 @@ int bluetootherMain(int nArgC, char** aArgV) noexcept
 	}
 
 	// Create the child process.
-	oPid = ::fork();
+	const pid_t oPid = ::fork();
 	if (oPid == static_cast<pid_t>(0)) {
 		// This is the child process.
 		// Close other ends first.
@@ -194,7 +194,25 @@ int bluetootherMain(int nArgC, char** aArgV) noexcept
 			return EXIT_FAILURE; //---------------------------------------------
 		}
 		//
-		return startGUIClient(bReadOnly, bNoRestrictedWarning, aCmdPipe[1], aReturnPipe[0]); //----
+		nRet = startGUIClient(bReadOnly, bNoRestrictedWarning, aCmdPipe[1], aReturnPipe[0]);
+		// the closing of the pipes causes the server to exit
+		::close(aCmdPipe[1]);
+		::close(aReturnPipe[0]);
+		// wait for child to exit
+		int nWStatus;
+		const auto oResPid = ::waitpid(oPid, &nWStatus, 0);
+		if (oResPid < 0) {
+			// error
+			std::cerr << "Internal error: " << errno << " waiting child process " << static_cast<int32_t>(oResPid) << "." << '\n';
+			return EXIT_FAILURE; //---------------------------------------------
+		}
+		if (WIFEXITED(nWStatus)) {
+			//
+		} else if (WIFSIGNALED(nWStatus)) {
+			std::cerr << "Signal " << WTERMSIG(nWStatus) << " terminated child process " << static_cast<int32_t>(oResPid) << "." << '\n';
+			return EXIT_FAILURE; //---------------------------------------------
+		}
+		return nRet;
 	}
 }
 

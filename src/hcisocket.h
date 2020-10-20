@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2019  Stefano Marsili, <stemars@gmx.ch>
+ * Copyright © 2017-2020  Stefano Marsili, <stemars@gmx.ch>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ public:
 	 * @return False if some error.
 	 */
 	bool update() noexcept;
-	
+
 	/** The healthy hci ids.
 	 * ex. the 0 in "hci0:".
 	 * Calls update() if not called yet.

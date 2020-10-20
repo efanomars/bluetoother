@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2019  Stefano Marsili, <stemars@gmx.ch>
+ * Copyright © 2017-2020  Stefano Marsili, <stemars@gmx.ch>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -82,11 +82,15 @@ bool PipeInputSource::dispatch(sigc::slot_base* p0Slot) noexcept
 //std::cout << "PipeInputSource::dispatch" << '\n';
 
 	const auto nIoEvents = m_oReadPollFD.get_revents();
+	if ((nIoEvents & (Glib::IO_ERR | Glib::IO_NVAL)) != 0) {
+		// close pipe
+		const bool bPipeError = ((nIoEvents & Glib::IO_ERR) != 0);
+		(*static_cast<sigc::slot<void, bool, const std::string&>*>(p0Slot))(true, (bPipeError ? "Pipe error" : "Pipe invalid"));
+		return !bContinue; // --------------------------------------------------
+	}
 	const bool bClientHangedUp = ((nIoEvents & Glib::IO_HUP) != 0);
-	const bool bPipeError = ((nIoEvents & (Glib::IO_ERR | Glib::IO_NVAL)) != 0);
-	if (bClientHangedUp || bPipeError) {
-		// some sort of problem ... close pipe
-		(*static_cast<sigc::slot<void, bool, const std::string&>*>(p0Slot))(true, (bPipeError ? "Pipe error" : "Client hanged up"));
+	if (bClientHangedUp) {
+		(*static_cast<sigc::slot<void, bool, const std::string&>*>(p0Slot))(true, "Client hanged up");
 		return !bContinue; // --------------------------------------------------
 	}
 	if ((nIoEvents & G_IO_IN) != 0) {
@@ -101,20 +105,25 @@ bool PipeInputSource::dispatch(sigc::slot_base* p0Slot) noexcept
 			return !bContinue; //-------------------------------------------
 		}
 		// rest
-		auto p0Zero = static_cast<char*>(std::memchr(aStreamBuf, 0, nReadLen));
-		if (p0Zero == nullptr) {
-			m_sReceiveBuffer += std::string(aStreamBuf, nReadLen);
-		} else {
+		char* p0CurPos = aStreamBuf;
+		int32_t nRestLen = nReadLen;
+		do {
+			auto p0Zero = static_cast<char*>(std::memchr(p0CurPos, 0, nRestLen));
+			if (p0Zero == nullptr) {
+				m_sReceiveBuffer += std::string(p0CurPos, nRestLen);
+				break; // do ----
+			}
 			//           111111111122222
 			// 0123456789012345678901234
 			// xxxxxxxxxxxxxxxx0yyyyyyyy
-			// nReadLen = 25, nAttach = 16, nRest = 8
-			const int32_t nAttach = p0Zero - aStreamBuf;
-			const int32_t nRest = nReadLen - 1 - nAttach;
-			m_sReceiveBuffer += std::string(aStreamBuf, nAttach);
+			// nRestLen = 25, nAttach = 16 => nRestLen = 8
+			const int32_t nAttach = p0Zero - p0CurPos;
+			nRestLen = nRestLen - 1 - nAttach;
+			m_sReceiveBuffer += std::string(p0CurPos, nAttach);
 			(*static_cast<sigc::slot<void, bool, const std::string&>*>(p0Slot))(false, m_sReceiveBuffer);
-			m_sReceiveBuffer = std::string(p0Zero + 1, nRest);
-		}
+			m_sReceiveBuffer.clear();
+			p0CurPos = p0Zero + 1;
+		} while (nRestLen > 0);
 	}
 	return bContinue;
 }

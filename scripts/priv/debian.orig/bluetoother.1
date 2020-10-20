@@ -10,13 +10,16 @@ bluetoother \- Bluetoooth adapter connectivity GUI tool.
 .SH OPTIONS
 .PP
 .br
-\fB--no-warn-dlg\fR     No warning dialog in restricted mode.
+\fB--print-server-errors\fR  Prints errors.
 .br
 .br
-\fB-v --version\fR      Prints version.
+\fB--no-warn-dlg\fR          No warning dialog in restricted mode.
 .br
 .br
-\fB-h --help\fR         Prints this message.
+\fB-v --version\fR           Prints version.
+.br
+.br
+\fB-h --help\fR              Prints this message.
 
 .SH DESCRIPTION
 .PP
@@ -29,13 +32,31 @@ is limited.
 With Wayland it should be run with 'pkexec bluetoother'.
 With X11 it is also possible to use 'sudo bluetoother'.
 
+\fITroubleshooting\fR: If the 'pkexec' command doesn't work, it's
+probably because there isn't a policykit authentication agent installed.
+Each desktop environment usually has its own implementation, which
+should be chosen.
+
+At the time of writing, on \fBDebian\fR based distributions:
+     - \fIMate\fR needs package 'mate-polkit' to be installed.
+     - \fIXFCE\fR and \fICinnamon\fR need 'policykit-1-gnome'.
+     - \fIKDE\fR needs 'polkit-kde-agent-1'.
+     - \fILXDE\fR needs package 'lxpolkit'.
+
+On \fBArch\fR based distributions the package names change slightly:
+     - \fIMate\fR needs package 'mate-polkit'.
+     - \fIXFCE\fR and \fICinnamon\fR need 'policy-gnome'.
+     - \fIKDE\fR needs 'polkit-kde-agent'.
+     - \fILXDE\fR needs package 'lxsession'.
+
+
 .SH AUTHOR
 .PP
 Written by Stefano Marsili <efanomars@gmx.ch>.
 
 .SH LICENSE
 .PP
-Copyright © 2017-2019 Stefano Marsili.
+Copyright © 2017-2020  Stefano Marsili.
 
 .PP
 This program is free software: you can redistribute it and/or modify

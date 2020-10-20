@@ -20,6 +20,7 @@
 
 #include "jsoncommon.h"
 
+#include <sstream>
 #include <iostream>
 #include <cassert>
 #include <utility>

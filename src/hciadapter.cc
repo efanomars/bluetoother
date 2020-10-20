@@ -1,5 +1,5 @@
 /*
- * Copyright © 2017-2019  Stefano Marsili, <stemars@gmx.ch>
+ * Copyright © 2017-2020  Stefano Marsili, <stemars@gmx.ch>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,6 +13,9 @@
  *
  * You should have received a copy of the GNU General Public
  * License along with this program; if not, see <http://www.gnu.org/licenses/>
+ */
+/*
+ * File:   hciadapter.cc
  */
 /* Parts of code from bluez package
  *  Copyright (C) 2000-2001  Qualcomm Incorporated
@@ -176,7 +179,7 @@ bool HciAdapter::setLocalName(const std::string& sName) noexcept
 		::hci_close_dev(nDd);
 		return false; //--------------------------------------------------------
 	}
-	
+
 	::hci_close_dev(nDd);
 	return true;
 }
@@ -317,12 +320,12 @@ bool HciAdapter::setSoftwareEnabled(bool bEnabled) noexcept
 	}
 
 	struct rfkill_event oEvent __attribute__ ((aligned(__alignof__(rfkill_event))));
-	memset(&oEvent, 0, sizeof(oEvent));
+	::memset(&oEvent, 0, sizeof(oEvent));
 	oEvent.op = RFKILL_OP_CHANGE;
 	oEvent.idx = m_nRfKillIdx;
 	oEvent.soft = !bEnabled;
 
-	const auto nLen = write(nFd, &oEvent, sizeof(oEvent));
+	const auto nLen = ::write(nFd, &oEvent, sizeof(oEvent));
 	if (nLen < 0) {
 		::close(nFd);
 		setError("Failed to change rfkill state for");
@@ -350,7 +353,7 @@ bool HciAdapter::setAdapterIsUp(bool bUp) noexcept
 		if (::ioctl(m_nHciSocket, HCIDEVDOWN, m_nHciId) < 0) {
 			setError("Can't down device");
 			return false; //----------------------------------------------------
-		}		
+		}
 	}
 	return true;
 }
